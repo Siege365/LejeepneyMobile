@@ -5,12 +5,10 @@ allprojects {
     }
 }
 
-val newBuildDir = rootProject.projectDir.resolve("../../build")
-rootProject.layout.buildDirectory.set(newBuildDir)
+rootProject.layout.buildDirectory = rootProject.projectDir.parentFile.resolve("build")
 
 subprojects {
-    val newSubprojectBuildDir = newBuildDir.resolve(project.name)
-    project.layout.buildDirectory.set(newSubprojectBuildDir)
+    project.layout.buildDirectory = rootProject.projectDir.parentFile.resolve("build").resolve(project.name)
     project.evaluationDependsOn(":app")
 }
 
