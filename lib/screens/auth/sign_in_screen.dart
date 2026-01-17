@@ -1,8 +1,27 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_colors.dart';
+import 'login_screen.dart';
 
-class SignInScreen extends StatelessWidget {
+class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
+
+  @override
+  State<SignInScreen> createState() => _SignInScreenState();
+}
+
+class _SignInScreenState extends State<SignInScreen> {
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _mobileController = TextEditingController();
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _mobileController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +39,7 @@ class SignInScreen extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
-                    vertical: 40,
+                    vertical: 32,
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.white,
@@ -36,41 +55,170 @@ class SignInScreen extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Small Logo
+                      // Logo
                       Image.asset(
                         'assets/images/LogoSignInPage.png',
-                        width: 150,
-                        height: 150,
+                        width: 120,
+                        height: 120,
                         fit: BoxFit.contain,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 24),
 
-                      // App Name
-                      const SizedBox(height: 40),
-
-                      // Continue with Google Button
-                      _buildSocialButton(
-                        text: 'Continue with Google',
-                        icon: 'G',
-                        isGoogle: true,
-                        onPressed: () {
-                          // TODO: Implement Google Sign In
-                          _showComingSoon(context, 'Google Sign In');
-                        },
+                      // Username or Email Field
+                      TextField(
+                        controller: _usernameController,
+                        decoration: InputDecoration(
+                          hintText: 'Username or Email',
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          prefixIcon: Icon(
+                            Icons.person_outline,
+                            color: Colors.grey[400],
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: AppColors.darkBlue),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 16),
 
-                      // Continue with Facebook Button
-                      _buildSocialButton(
-                        text: 'Continue with Facebook',
-                        icon: 'f',
-                        isFacebook: true,
-                        onPressed: () {
-                          // TODO: Implement Facebook Sign In
-                          _showComingSoon(context, 'Facebook Sign In');
-                        },
+                      // Password Field
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          hintText: 'Password',
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          prefixIcon: Icon(
+                            Icons.lock_outline,
+                            color: Colors.grey[400],
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.grey[400],
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: AppColors.darkBlue),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+
+                      // Mobile Number Field
+                      TextField(
+                        controller: _mobileController,
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          hintText: 'Mobile Number',
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          prefixIcon: Icon(
+                            Icons.phone_outlined,
+                            color: Colors.grey[400],
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: AppColors.darkBlue),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Sign Up Button
+                      Container(
+                        width: double.infinity,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.blueGradient,
+                          borderRadius: BorderRadius.circular(25),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.darkBlue.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // TODO: Implement sign up logic
+                            _showComingSoon('Sign Up');
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(25),
+                            ),
+                          ),
+                          child: const Text(
+                            'SIGN UP',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Forgot Password
+                      TextButton(
+                        onPressed: () {},
+                        child: const Text(
+                          'Forgot Password?',
+                          style: TextStyle(
+                            color: AppColors.darkBlue,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+
+                      // Already have an account? Login
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "Already have an account? ",
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const LoginScreen(),
+                                ),
+                              );
+                            },
+                            child: const Text(
+                              'Login',
+                              style: TextStyle(
+                                color: AppColors.darkBlue,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
 
                       // OR Divider
                       Row(
@@ -78,35 +226,61 @@ class SignInScreen extends StatelessWidget {
                           Expanded(
                             child: Container(
                               height: 1,
-                              color: AppColors.lightGray,
+                              color: Colors.grey[300],
                             ),
                           ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Text(
-                              'or',
+                              'OR',
                               style: TextStyle(
-                                color: AppColors.gray,
-                                fontSize: 14,
+                                color: Colors.grey[500],
+                                fontSize: 12,
                               ),
                             ),
                           ),
                           Expanded(
                             child: Container(
                               height: 1,
-                              color: AppColors.lightGray,
+                              color: Colors.grey[300],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
 
-                      // Continue with Mobile Number Button
-                      _buildMobileButton(
-                        onPressed: () {
-                          // TODO: Implement Mobile Number Sign In
-                          _showComingSoon(context, 'Mobile Number Sign In');
-                        },
+                      // Sign up with Social Networks text
+                      Text(
+                        'Sign up with Social Networks',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Social Buttons Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Facebook
+                          _buildSocialCircle(
+                            icon: Icons.facebook,
+                            color: const Color(0xFF3B5998),
+                            onTap: () => _showComingSoon('Facebook Sign Up'),
+                          ),
+                          const SizedBox(width: 20),
+                          // Google
+                          _buildSocialCircle(
+                            icon: Icons.g_mobiledata,
+                            color: const Color(0xFFDB4437),
+                            onTap: () => _showComingSoon('Google Sign Up'),
+                          ),
+                          const SizedBox(width: 20),
+                          // Twitter
+                          _buildSocialCircle(
+                            icon: Icons.alternate_email,
+                            color: const Color(0xFF1DA1F2),
+                            onTap: () => _showComingSoon('Twitter Sign Up'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -119,141 +293,33 @@ class SignInScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSocialButton({
-    required String text,
-    required String icon,
-    bool isGoogle = false,
-    bool isFacebook = false,
-    required VoidCallback onPressed,
+  Widget _buildSocialCircle({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
   }) {
-    return Container(
-      width: double.infinity,
-      height: 50,
-      decoration: BoxDecoration(
-        gradient: AppColors.blueGradient,
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.darkBlue.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              text,
-              style: const TextStyle(
-                color: AppColors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 12),
-            // Icon Container
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Center(
-                child: isGoogle
-                    ? Image.network(
-                        'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                        width: 18,
-                        height: 18,
-                        errorBuilder: (context, error, stackTrace) => Text(
-                          'G',
-                          style: TextStyle(
-                            color: AppColors.googleBlue,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      )
-                    : Text(
-                        'f',
-                        style: TextStyle(
-                          color: AppColors.facebookBlue,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 45,
+        height: 45,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
+        child: Icon(icon, color: Colors.white, size: 24),
       ),
     );
   }
 
-  Widget _buildMobileButton({required VoidCallback onPressed}) {
-    return Container(
-      width: double.infinity,
-      height: 50,
-      decoration: BoxDecoration(
-        color: AppColors.gray,
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Continue with Mobile Number',
-              style: TextStyle(
-                color: AppColors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Center(
-                child: Icon(Icons.phone, size: 18, color: AppColors.gray),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showComingSoon(BuildContext context, String feature) {
+  void _showComingSoon(String feature) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('$feature coming soon!'),
