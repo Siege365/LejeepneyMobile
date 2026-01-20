@@ -11,6 +11,7 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   final _usernameController = TextEditingController();
+  final _mobilenumberController = TextEditingController();
   final _passwordController = TextEditingController();
   final _mobileController = TextEditingController();
   bool _obscurePassword = true;
@@ -18,6 +19,7 @@ class _SignInScreenState extends State<SignInScreen> {
   @override
   void dispose() {
     _usernameController.dispose();
+    _mobilenumberController.dispose();
     _passwordController.dispose();
     _mobileController.dispose();
     super.dispose();
@@ -39,7 +41,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
-                    vertical: 32,
+                    vertical: 40,
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.white,
@@ -58,20 +60,40 @@ class _SignInScreenState extends State<SignInScreen> {
                       // Logo
                       Image.asset(
                         'assets/images/LogoSignInPage.png',
-                        width: 120,
-                        height: 120,
+                        width: 100,
+                        height: 100,
                         fit: BoxFit.contain,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 32),
 
-                      // Username or Email Field
+                      // Username Field
                       TextField(
                         controller: _usernameController,
                         decoration: InputDecoration(
-                          hintText: 'Username or Email',
+                          hintText: 'Username',
                           hintStyle: TextStyle(color: Colors.grey[400]),
                           prefixIcon: Icon(
-                            Icons.person_outline,
+                            Icons.person,
+                            color: Colors.grey[400],
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: AppColors.darkBlue),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Mobile Number Field
+                      TextField(
+                        controller: _mobilenumberController,
+                        decoration: InputDecoration(
+                          hintText: 'Mobile Number',
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          prefixIcon: Icon(
+                            Icons.phone_android_rounded,
                             color: Colors.grey[400],
                           ),
                           enabledBorder: UnderlineInputBorder(
@@ -116,52 +138,19 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-
-                      // Mobile Number Field
-                      TextField(
-                        controller: _mobileController,
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
-                          hintText: 'Mobile Number',
-                          hintStyle: TextStyle(color: Colors.grey[400]),
-                          prefixIcon: Icon(
-                            Icons.phone_outlined,
-                            color: Colors.grey[400],
-                          ),
-                          enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: AppColors.darkBlue),
-                          ),
-                        ),
-                      ),
                       const SizedBox(height: 32),
 
                       // Sign Up Button
-                      Container(
+                      SizedBox(
                         width: double.infinity,
                         height: 50,
-                        decoration: BoxDecoration(
-                          gradient: AppColors.blueGradient,
-                          borderRadius: BorderRadius.circular(25),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.darkBlue.withOpacity(0.3),
-                              blurRadius: 10,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
                         child: ElevatedButton(
                           onPressed: () {
                             // TODO: Implement sign up logic
                             _showComingSoon('Sign Up');
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
+                            backgroundColor: AppColors.darkBlue,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(25),
                             ),
@@ -169,35 +158,22 @@ class _SignInScreenState extends State<SignInScreen> {
                           child: const Text(
                             'SIGN UP',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: AppColors.white,
                               fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 16),
 
-                      // Forgot Password
-                      TextButton(
-                        onPressed: () {},
-                        child: const Text(
-                          'Forgot Password?',
-                          style: TextStyle(
-                            color: AppColors.darkBlue,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-
                       // Already have an account? Login
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
+                          const Text(
                             "Already have an account? ",
-                            style: TextStyle(color: Colors.grey[600]),
+                            style: TextStyle(color: AppColors.gray),
                           ),
                           GestureDetector(
                             onTap: () {
@@ -212,73 +188,9 @@ class _SignInScreenState extends State<SignInScreen> {
                               'Login',
                               style: TextStyle(
                                 color: AppColors.darkBlue,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // OR Divider
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              height: 1,
-                              color: Colors.grey[300],
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text(
-                              'OR',
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Container(
-                              height: 1,
-                              color: Colors.grey[300],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Sign up with Social Networks text
-                      Text(
-                        'Sign up with Social Networks',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Social Buttons Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Facebook
-                          _buildSocialCircle(
-                            icon: Icons.facebook,
-                            color: const Color(0xFF3B5998),
-                            onTap: () => _showComingSoon('Facebook Sign Up'),
-                          ),
-                          const SizedBox(width: 20),
-                          // Google
-                          _buildSocialCircle(
-                            icon: Icons.g_mobiledata,
-                            color: const Color(0xFFDB4437),
-                            onTap: () => _showComingSoon('Google Sign Up'),
-                          ),
-                          const SizedBox(width: 20),
-                          // Twitter
-                          _buildSocialCircle(
-                            icon: Icons.alternate_email,
-                            color: const Color(0xFF1DA1F2),
-                            onTap: () => _showComingSoon('Twitter Sign Up'),
                           ),
                         ],
                       ),
