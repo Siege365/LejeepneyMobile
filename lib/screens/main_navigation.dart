@@ -43,7 +43,8 @@ class _MainNavigationState extends State<MainNavigation> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _buildNavItem(0, Icons.home, 'Home'),
                 _buildNavItem(1, Icons.search, 'Search'),
@@ -60,58 +61,62 @@ class _MainNavigationState extends State<MainNavigation> {
 
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _currentIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? AppColors.darkBlue : AppColors.gray,
-            size: 24,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _currentIndex = index),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
               color: isSelected ? AppColors.darkBlue : AppColors.gray,
-              fontSize: 10,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              size: 24,
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? AppColors.darkBlue : AppColors.gray,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildCenterNavItem() {
     final isSelected = _currentIndex == 2;
-    return GestureDetector(
-      onTap: () => setState(() => _currentIndex = 2),
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            colors: isSelected
-                ? [AppColors.darkBlue, const Color(0xFF1E88E5)]
-                : [const Color(0xFF7B68EE), const Color(0xFF9370DB)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.darkBlue.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _currentIndex = 2),
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: isSelected
+                  ? [AppColors.darkBlue, const Color(0xFF1E88E5)]
+                  : [const Color(0xFF7B68EE), const Color(0xFF9370DB)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-          ],
-        ),
-        child: const Icon(
-          Icons.directions_bus,
-          color: AppColors.white,
-          size: 28,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.darkBlue.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.directions_bus,
+            color: AppColors.white,
+            size: 28,
+          ),
         ),
       ),
     );

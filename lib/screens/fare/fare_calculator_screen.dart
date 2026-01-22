@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
+import '../../models/jeepney_route.dart';
+import '../../services/api_service.dart';
 import 'map_fare_calculator_screen.dart';
 
 class FareCalculatorScreen extends StatefulWidget {
@@ -15,6 +17,15 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
   double? _mapDistance;
   String? _mapFromArea;
   String? _mapToArea;
+
+  // API integration
+  final ApiService _apiService = ApiService();
+  List<JeepneyRoute> _suggestedRoutes = [];
+  bool _isLoadingRoutes = false;
+  double? _fromLat;
+  double? _fromLng;
+  double? _toLat;
+  double? _toLng;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +69,13 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                         _mapToArea = result['to'];
                         _calculatedFare = result['fare'];
                         _mapDistance = result['distance'];
+                        _fromLat = result['fromLat'];
+                        _fromLng = result['fromLng'];
+                        _toLat = result['toLat'];
+                        _toLng = result['toLng'];
                       });
+                      // Fetch route suggestions from API
+                      _fetchRouteSuggestions();
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -153,7 +170,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '${_mapFromArea} → ${_mapToArea}',
+                        '$_mapFromArea → $_mapToArea',
                         style: const TextStyle(
                           fontSize: 14,
                           color: AppColors.gray,
@@ -233,22 +250,48 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      // TODO: Replace with actual route suggestions from backend
-                      _buildPlaceholderRoute(
-                        1,
-                        'Finding optimal routes...',
-                        'Based on your selected points',
-                      ),
-                      _buildPlaceholderRoute(
-                        2,
-                        'Route 04-A (Direct)',
-                        'Estimated: ₱13.00 • 15-20 mins',
-                      ),
-                      _buildPlaceholderRoute(
-                        3,
-                        'Route 10-B (1 transfer)',
-                        'Estimated: ₱26.00 • 25-30 mins',
-                      ),
+                      // Loading state
+                      if (_isLoadingRoutes)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              children: [
+                                SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.darkBlue,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Finding optimal routes...',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.gray,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      // API routes found
+                      else if (_suggestedRoutes.isNotEmpty)
+                        ..._suggestedRoutes.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final route = entry.value;
+                          return _buildRouteCard(index + 1, route);
+                        })
+                      // No routes found - show placeholder
+                      else ...[
+                        _buildPlaceholderRoute(
+                          1,
+                          'No direct routes found',
+                          'Try adjusting your pickup/drop-off points',
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.all(12),
@@ -266,7 +309,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Route suggestions will be ranked by: directness, transfers, total fare, and estimated time.',
+                                'Route suggestions are ranked by: directness, transfers, total fare, and estimated time.',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: AppColors.gray,
@@ -327,6 +370,183 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> _fetchRouteSuggestions() async {
+    if (_fromLat == null ||
+        _fromLng == null ||
+        _toLat == null ||
+        _toLng == null) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingRoutes = true;
+      _suggestedRoutes = [];
+    });
+
+    try {
+      final routes = await _apiService.findRoutes(
+        fromLat: _fromLat!,
+        fromLng: _fromLng!,
+        toLat: _toLat!,
+        toLng: _toLng!,
+        tolerance: 0.5, // 500m tolerance
+      );
+
+      if (mounted) {
+        setState(() {
+          _suggestedRoutes = routes.take(5).toList(); // Max 5 routes
+          _isLoadingRoutes = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch routes: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingRoutes = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildRouteCard(int rank, JeepneyRoute route) {
+    // Parse route color
+    Color routeColor = AppColors.darkBlue;
+    if (route.color != null) {
+      try {
+        routeColor = Color(int.parse(route.color!.replaceFirst('#', '0xFF')));
+      } catch (_) {}
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: rank == 1
+            ? routeColor.withOpacity(0.08)
+            : AppColors.lightGray.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: rank == 1
+              ? routeColor.withOpacity(0.3)
+              : AppColors.lightGray.withOpacity(0.5),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: rank == 1 ? routeColor : AppColors.gray.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: rank == 1
+                  ? const Icon(Icons.star, color: Colors.white, size: 18)
+                  : Text(
+                      '$rank',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: routeColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        route.routeNumber,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          color: routeColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        route.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: rank == 1 ? routeColor : AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.attach_money,
+                      size: 12,
+                      color: AppColors.success,
+                    ),
+                    Text(
+                      route.fareDisplay,
+                      style: TextStyle(
+                        color: AppColors.success,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (route.distanceKm != null) ...[
+                      const SizedBox(width: 12),
+                      Icon(Icons.straighten, size: 12, color: AppColors.gray),
+                      const SizedBox(width: 2),
+                      Text(
+                        route.distanceDisplay,
+                        style: TextStyle(color: AppColors.gray, fontSize: 12),
+                      ),
+                    ],
+                    if (route.terminal != null) ...[
+                      const SizedBox(width: 12),
+                      Icon(Icons.location_on, size: 12, color: AppColors.gray),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          route.terminal!,
+                          style: TextStyle(color: AppColors.gray, fontSize: 11),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.chevron_right,
+            color: AppColors.gray.withOpacity(0.5),
+            size: 20,
+          ),
+        ],
       ),
     );
   }

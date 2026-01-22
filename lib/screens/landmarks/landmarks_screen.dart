@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../constants/app_colors.dart';
+import '../../models/landmark.dart';
+import '../../services/api_service.dart';
 
 class LandmarksScreen extends StatefulWidget {
   const LandmarksScreen({super.key});
@@ -13,6 +16,14 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
   String _selectedCategory = 'All';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  final ApiService _apiService = ApiService();
+
+  // API data
+  List<Landmark> _apiLandmarks = [];
+  bool _isLoading = true;
+  bool _isUsingApi = false;
+  String? _errorMessage;
+  Position? _userPosition;
 
   final List<String> _categories = [
     'All',
@@ -22,252 +33,113 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
     'Hospitals',
     'Transport',
   ];
+  // All landmarks are now provided by the API; no local hardcoded data.
 
-  final List<Map<String, dynamic>> _landmarks = [
-    // Downtown / City Center
-    {
-      'name': 'San Pedro Cathedral',
-      'category': 'Downtown',
-      'icon': Icons.church,
-      'area': 'San Pedro Street',
-      'distance': '1.2 km',
-    },
-    {
-      'name': 'City Hall of Davao',
-      'category': 'Downtown',
-      'icon': Icons.account_balance,
-      'area': 'San Pedro',
-      'distance': '1.5 km',
-    },
-    {
-      'name': 'Rizal Park',
-      'category': 'Downtown',
-      'icon': Icons.park,
-      'area': 'Downtown',
-      'distance': '1.3 km',
-    },
-    {
-      'name': 'People\'s Park',
-      'category': 'Downtown',
-      'icon': Icons.nature_people,
-      'area': 'Palma Gil Street',
-      'distance': '1.4 km',
-    },
-    {
-      'name': 'Ateneo de Davao University',
-      'category': 'Downtown',
-      'icon': Icons.school,
-      'area': 'Jacinto / Roxas Ave',
-      'distance': '2.0 km',
-    },
-    {
-      'name': 'Roxas Avenue Night Market',
-      'category': 'Downtown',
-      'icon': Icons.nightlife,
-      'area': 'Roxas Avenue',
-      'distance': '1.8 km',
-    },
-    {
-      'name': 'Claveria Street',
-      'category': 'Downtown',
-      'icon': Icons.location_city,
-      'area': 'Downtown',
-      'distance': '1.6 km',
-    },
-    {
-      'name': 'Bangkerohan Public Market',
-      'category': 'Downtown',
-      'icon': Icons.storefront,
-      'area': 'Bankerohan',
-      'distance': '2.2 km',
-    },
-    {
-      'name': 'Agdao Public Market',
-      'category': 'Downtown',
-      'icon': Icons.store,
-      'area': 'Agdao',
-      'distance': '3.5 km',
-    },
-    {
-      'name': 'Uyanguren',
-      'category': 'Downtown',
-      'icon': Icons.streetview,
-      'area': 'Downtown',
-      'distance': '1.7 km',
-    },
-    {
-      'name': 'Quimpo Boulevard',
-      'category': 'Downtown',
-      'icon': Icons.route,
-      'area': 'Matina',
-      'distance': '4.0 km',
-    },
-    {
-      'name': 'Ecoland Terminal',
-      'category': 'Downtown',
-      'icon': Icons.directions_bus,
-      'area': 'Ecoland',
-      'distance': '5.2 km',
-    },
-    {
-      'name': 'SM City Davao',
-      'category': 'Downtown',
-      'icon': Icons.shopping_bag,
-      'area': 'Ecoland',
-      'distance': '5.5 km',
-    },
+  @override
+  void initState() {
+    super.initState();
+    _initializeData();
+  }
 
-    // Malls & Commercial
-    {
-      'name': 'Gaisano Mall of Davao',
-      'category': 'Malls',
-      'icon': Icons.local_mall,
-      'area': 'Ilustre Street',
-      'distance': '1.9 km',
-    },
-    {
-      'name': 'Abreeza Mall',
-      'category': 'Malls',
-      'icon': Icons.shopping_cart,
-      'area': 'JP Laurel Avenue',
-      'distance': '3.2 km',
-    },
-    {
-      'name': 'Victoria Plaza',
-      'category': 'Malls',
-      'icon': Icons.business,
-      'area': 'Bankerohan',
-      'distance': '2.3 km',
-    },
-    {
-      'name': 'SM Lanang Premier',
-      'category': 'Malls',
-      'icon': Icons.storefront,
-      'area': 'Lanang',
-      'distance': '6.0 km',
-    },
-    {
-      'name': 'NCCC Mall Buhangin',
-      'category': 'Malls',
-      'icon': Icons.store,
-      'area': 'Buhangin',
-      'distance': '4.5 km',
-    },
-    {
-      'name': 'NCCC Mall Uyanguren',
-      'category': 'Malls',
-      'icon': Icons.store,
-      'area': 'Uyanguren',
-      'distance': '1.8 km',
-    },
-    {
-      'name': 'Aldevinco Shopping Center',
-      'category': 'Malls',
-      'icon': Icons.shopping_basket,
-      'area': 'CM Recto Street',
-      'distance': '1.4 km',
-    },
+  Future<void> _initializeData() async {
+    await _getUserLocation();
+    await _fetchLandmarks();
+  }
 
-    // Schools & Institutions
-    {
-      'name': 'University of Mindanao',
-      'category': 'Schools',
-      'icon': Icons.school,
-      'area': 'Bolton / Matina',
-      'distance': '3.8 km',
-    },
-    {
-      'name': 'San Pedro College',
-      'category': 'Schools',
-      'icon': Icons.school,
-      'area': 'San Pedro',
-      'distance': '1.5 km',
-    },
-    {
-      'name': 'USeP',
-      'category': 'Schools',
-      'icon': Icons.school,
-      'area': 'Obrero / Mintal',
-      'distance': '4.2 km',
-    },
-    {
-      'name': 'Holy Cross of Davao College',
-      'category': 'Schools',
-      'icon': Icons.school,
-      'area': 'Sta. Ana Avenue',
-      'distance': '2.5 km',
-    },
-    {
-      'name': 'Davao Doctors College',
-      'category': 'Schools',
-      'icon': Icons.school,
-      'area': 'Gen. Malvar St.',
-      'distance': '1.6 km',
-    },
+  Future<void> _getUserLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
 
-    // Hospitals
-    {
-      'name': 'Southern Philippines Medical Center',
-      'category': 'Hospitals',
-      'icon': Icons.local_hospital,
-      'area': 'Bajada',
-      'distance': '2.8 km',
-    },
-    {
-      'name': 'Davao Doctors Hospital',
-      'category': 'Hospitals',
-      'icon': Icons.local_hospital,
-      'area': 'Gen. Malvar St.',
-      'distance': '1.7 km',
-    },
-    {
-      'name': 'San Pedro Hospital',
-      'category': 'Hospitals',
-      'icon': Icons.local_hospital,
-      'area': 'San Pedro',
-      'distance': '1.3 km',
-    },
-    {
-      'name': 'Brokenshire Hospital',
-      'category': 'Hospitals',
-      'icon': Icons.local_hospital,
-      'area': 'Madapo Hills',
-      'distance': '3.0 km',
-    },
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
 
-    // Transport & Terminals
-    {
-      'name': 'Ecoland Bus Terminal',
-      'category': 'Transport',
-      'icon': Icons.directions_bus,
-      'area': 'Ecoland',
-      'distance': '5.2 km',
-    },
-    {
-      'name': 'Francisco Bangoy Int\'l Airport',
-      'category': 'Transport',
-      'icon': Icons.flight,
-      'area': 'Buhangin',
-      'distance': '7.5 km',
-    },
-  ];
+      if (permission == LocationPermission.deniedForever) return;
 
-  List<Map<String, dynamic>> get _filteredLandmarks {
-    return _landmarks.where((landmark) {
+      _userPosition = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+    } catch (e) {
+      // Fallback to Davao City center
+      debugPrint('Location error: $e');
+    }
+  }
+
+  Future<void> _fetchLandmarks() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Use GET endpoint for now (POST nearby has validation issues)
+      final landmarks = await _apiService.fetchAllLandmarks();
+
+      if (!mounted) return;
+
+      setState(() {
+        _apiLandmarks = landmarks;
+        _isUsingApi = true;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('API Error: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isUsingApi = false;
+        _apiLandmarks = [];
+        _isLoading = false;
+        _errorMessage = 'Failed to load landmarks';
+      });
+    }
+  }
+
+  // Helper to get icon based on category
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'city_center':
+      case 'downtown':
+        return Icons.location_city;
+      case 'mall':
+      case 'malls':
+        return Icons.local_mall;
+      case 'school':
+      case 'schools':
+        return Icons.school;
+      case 'hospital':
+      case 'hospitals':
+        return Icons.local_hospital;
+      case 'transport':
+        return Icons.directions_bus;
+      default:
+        return Icons.place;
+    }
+  }
+
+  // Get filtered landmarks (API only)
+  List<Landmark> get _filteredData {
+    return _apiLandmarks.where((landmark) {
       final matchesCategory =
           _selectedCategory == 'All' ||
-          landmark['category'] == _selectedCategory;
+          landmark.categoryDisplayName == _selectedCategory;
       final matchesSearch =
           _searchQuery.isEmpty ||
-          (landmark['name'] as String).toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ) ||
-          (landmark['area'] as String).toLowerCase().contains(
+          landmark.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          (landmark.description ?? '').toLowerCase().contains(
             _searchQuery.toLowerCase(),
           );
       return matchesCategory && matchesSearch;
     }).toList();
   }
+
+  // legacy data removed
 
   @override
   void dispose() {
@@ -365,7 +237,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
               child: Text(
                 _searchQuery.isEmpty
                     ? 'Popular destinations in Davao'
-                    : 'Results for "${_searchQuery}"',
+                    : 'Results for "$_searchQuery"',
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textPrimary.withOpacity(0.8),
@@ -435,9 +307,57 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
             ),
             const SizedBox(height: 16),
 
+            // API Status indicator
+            if (_errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.wifi_off, size: 14, color: AppColors.warning),
+                      const SizedBox(width: 6),
+                      Text(
+                        _errorMessage!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.warning,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (_errorMessage != null) const SizedBox(height: 8),
+
             // Landmarks List
             Expanded(
-              child: _filteredLandmarks.isEmpty
+              child: _isLoading
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(color: AppColors.darkBlue),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Loading landmarks...',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.gray,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _filteredData.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -458,23 +378,34 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _filteredLandmarks.length,
-                      itemBuilder: (context, index) {
-                        final landmark = _filteredLandmarks[index];
-                        return _buildLandmarkCard(landmark);
-                      },
+                  : RefreshIndicator(
+                      onRefresh: _fetchLandmarks,
+                      color: AppColors.darkBlue,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _filteredData.length,
+                        itemBuilder: (context, index) {
+                          final landmark = _filteredData[index];
+                          return _buildApiLandmarkCard(landmark);
+                        },
+                      ),
                     ),
             ),
-            const SizedBox(height: 80), // Space for bottom nav
+            const SizedBox(height: 20), // Space for bottom nav
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLandmarkCard(Map<String, dynamic> landmark) {
+  // Removed local-map card helper; API card is used exclusively.
+
+  // Build card for API landmark data
+  Widget _buildApiLandmarkCard(Landmark landmark) {
+    final distanceText = landmark.distance != null
+        ? '${landmark.distance!.toStringAsFixed(1)} km'
+        : 'N/A';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
@@ -493,9 +424,10 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () {
+            // TODO: Navigate to landmark detail or show on map
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Navigate to ${landmark['name']}'),
+                content: Text('Navigate to ${landmark.name}'),
                 backgroundColor: AppColors.darkBlue,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
@@ -508,7 +440,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Icon Container
+                // Icon Container or Image
                 Container(
                   width: 70,
                   height: 70,
@@ -516,11 +448,24 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                     color: AppColors.primary.withOpacity(0.25),
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  child: Icon(
-                    landmark['icon'] as IconData,
-                    color: AppColors.darkBlue,
-                    size: 35,
-                  ),
+                  child: landmark.iconUrl != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(15),
+                          child: Image.network(
+                            landmark.iconUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              _getCategoryIcon(landmark.category),
+                              color: AppColors.darkBlue,
+                              size: 35,
+                            ),
+                          ),
+                        )
+                      : Icon(
+                          _getCategoryIcon(landmark.category),
+                          color: AppColors.darkBlue,
+                          size: 35,
+                        ),
                 ),
                 const SizedBox(width: 16),
                 // Info
@@ -529,7 +474,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        landmark['name'] as String,
+                        landmark.name,
                         style: GoogleFonts.slackey(
                           fontSize: 14,
                           color: AppColors.textPrimary,
@@ -551,7 +496,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              landmark['category'] as String,
+                              landmark.categoryDisplayName,
                               style: TextStyle(
                                 fontSize: 10,
                                 color: AppColors.success,
@@ -559,25 +504,49 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.location_on,
-                            size: 12,
-                            color: AppColors.gray,
-                          ),
-                          const SizedBox(width: 2),
-                          Expanded(
-                            child: Text(
-                              landmark['area'] as String,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.gray,
+                          if (landmark.isFeatured) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
                               ),
-                              overflow: TextOverflow.ellipsis,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.star,
+                                    size: 10,
+                                    color: AppColors.darkBlue,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    'Featured',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: AppColors.darkBlue,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
+                      if (landmark.description != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          landmark.description!,
+                          style: TextStyle(fontSize: 11, color: AppColors.gray),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                       const SizedBox(height: 6),
                       Row(
                         children: [
@@ -588,7 +557,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '${landmark['distance']} away',
+                            '$distanceText away',
                             style: TextStyle(
                               fontSize: 12,
                               color: AppColors.darkBlue,

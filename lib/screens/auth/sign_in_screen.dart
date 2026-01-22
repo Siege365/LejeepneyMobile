@@ -11,17 +11,15 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   final _usernameController = TextEditingController();
-  final _mobilenumberController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _mobileController = TextEditingController();
   bool _obscurePassword = true;
 
   @override
   void dispose() {
     _usernameController.dispose();
-    _mobilenumberController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
-    _mobileController.dispose();
     super.dispose();
   }
 
@@ -86,14 +84,14 @@ class _SignInScreenState extends State<SignInScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Mobile Number Field
+                      // Email Address Field
                       TextField(
-                        controller: _mobilenumberController,
+                        controller: _emailController,
                         decoration: InputDecoration(
-                          hintText: 'Mobile Number',
+                          hintText: 'Email Address',
                           hintStyle: TextStyle(color: Colors.grey[400]),
                           prefixIcon: Icon(
-                            Icons.phone_android_rounded,
+                            Icons.email,
                             color: Colors.grey[400],
                           ),
                           enabledBorder: UnderlineInputBorder(

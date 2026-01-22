@@ -28,10 +28,6 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
   bool _isLoadingRoute = false;
   List<LatLng> _routePath = [];
 
-  // TODO: Implement actual jeepney route suggestions based on user pinpoints
-  // This will be populated from backend/database later
-  List<Map<String, dynamic>> _suggestedRoutes = [];
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -635,12 +631,16 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
   void _confirmAndReturn() {
     if (_distance == null || _fare == null) return;
 
-    // Navigate back to fare calculator with results
+    // Navigate back to fare calculator with results including coordinates
     Navigator.pop(context, {
       'from': _areaA ?? 'Point A',
       'to': _areaB ?? 'Point B',
       'distance': _distance,
       'fare': _fare,
+      'fromLat': _pointA?.latitude,
+      'fromLng': _pointA?.longitude,
+      'toLat': _pointB?.latitude,
+      'toLng': _pointB?.longitude,
     });
   }
 

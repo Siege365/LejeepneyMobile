@@ -129,12 +129,6 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     _buildDivider(),
                     _buildSettingItem(
-                      icon: Icons.favorite_border,
-                      title: 'Saved Routes',
-                      onTap: () {},
-                    ),
-                    _buildDivider(),
-                    _buildSettingItem(
                       icon: Icons.notifications_outlined,
                       title: 'Notifications',
                       onTap: () {},
@@ -155,6 +149,12 @@ class ProfileScreen extends StatelessWidget {
                     _buildSettingItem(
                       icon: Icons.info_outline,
                       title: 'About',
+                      onTap: () {},
+                    ),
+                    _buildDivider(),
+                    _buildSettingItem(
+                      icon: Icons.logout,
+                      title: 'Log Out',
                       onTap: () {},
                     ),
                   ],

@@ -5,12 +5,14 @@ import '../constants/app_colors.dart';
 class RouteListItem extends StatelessWidget {
   final String routeName;
   final bool isAvailable;
+  final bool isRouteVisible;
   final VoidCallback? onTap;
 
   const RouteListItem({
     super.key,
     required this.routeName,
     required this.isAvailable,
+    this.isRouteVisible = false,
     this.onTap,
   });
 
@@ -43,20 +45,24 @@ class RouteListItem extends StatelessWidget {
               color: AppColors.gray.withOpacity(0.3),
             ),
             const SizedBox(width: 16),
-            // Show Routes Button
+            // Show Route Toggle Button
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.darkBlue,
+                color: isRouteVisible ? AppColors.success : AppColors.darkBlue,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.route, color: AppColors.white, size: 14),
+                  Icon(
+                    isRouteVisible ? Icons.visibility : Icons.visibility_off,
+                    color: AppColors.white,
+                    size: 14,
+                  ),
                   const SizedBox(width: 4),
                   Text(
-                    'Show Routes',
+                    isRouteVisible ? 'Hide Route' : 'Show Route',
                     style: GoogleFonts.slackey(
                       fontSize: 10,
                       color: AppColors.white,

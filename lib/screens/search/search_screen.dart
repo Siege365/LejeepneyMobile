@@ -6,8 +6,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../constants/app_colors.dart';
-import '../../widgets/search_bar_widget.dart';
 import '../../widgets/route_list_item.dart';
+import '../../services/api_service.dart';
+import '../../models/jeepney_route.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -20,6 +21,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final MapController _mapController = MapController();
   final FocusNode _searchFocusNode = FocusNode();
+  final ApiService _apiService = ApiService();
 
   LatLng? _currentLocation;
   bool _isLoadingLocation = true;
@@ -32,18 +34,48 @@ class _SearchScreenState extends State<SearchScreen> {
   LatLng? _searchedLocation;
   String? _searchedPlaceName;
 
-  // Sample routes data
-  final List<Map<String, dynamic>> _routes = [
-    {'name': 'Route 2', 'available': true},
-    {'name': 'Route 10', 'available': true},
-    {'name': 'Calinan- Roxas', 'available': false},
-  ];
+  // API Routes data
+  List<JeepneyRoute> _routes = [];
+  bool _isLoadingRoutes = true;
+  String? _routesErrorMessage;
+
+  // Visible routes on map (route ID -> toggle state)
+  final Set<int> _visibleRouteIds = {};
 
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
+    _fetchRoutes();
     _searchController.addListener(_onSearchChanged);
+  }
+
+  Future<void> _fetchRoutes() async {
+    setState(() {
+      _isLoadingRoutes = true;
+      _routesErrorMessage = null;
+    });
+
+    try {
+      final routes = await _apiService.fetchAllRoutes();
+      if (mounted) {
+        // Sort routes alphabetically by name (A-Z)
+        routes.sort((a, b) => a.name.compareTo(b.name));
+
+        setState(() {
+          _routes = routes;
+          _isLoadingRoutes = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Routes API Error: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingRoutes = false;
+          _routesErrorMessage = 'Failed to load routes';
+        });
+      }
+    }
   }
 
   void _onSearchChanged() {
@@ -228,6 +260,94 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  void _fitMapToRoute(JeepneyRoute route) {
+    if (route.path.isEmpty) return;
+
+    double minLat = route.path[0].latitude;
+    double maxLat = route.path[0].latitude;
+    double minLng = route.path[0].longitude;
+    double maxLng = route.path[0].longitude;
+
+    for (var point in route.path) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLng) minLng = point.longitude;
+      if (point.longitude > maxLng) maxLng = point.longitude;
+    }
+
+    final bounds = LatLngBounds(LatLng(minLat, minLng), LatLng(maxLat, maxLng));
+
+    _mapController.fitCamera(
+      CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
+    );
+  }
+
+  Color? _parseColor(String? colorString) {
+    if (colorString == null || colorString.isEmpty) return null;
+    try {
+      final hexColor = colorString.replaceAll('#', '');
+      return Color(int.parse('FF$hexColor', radix: 16));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  List<Marker> _buildRouteMarkers(JeepneyRoute route) {
+    List<Marker> markers = [];
+
+    if (route.path.isEmpty) return markers;
+
+    // Start Point Marker (Green with Play Icon)
+    markers.add(
+      Marker(
+        point: route.path.first,
+        width: 40,
+        height: 40,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.green,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.play_arrow, color: Colors.white, size: 20),
+        ),
+      ),
+    );
+
+    // End Point Marker (Red with Stop Icon)
+    markers.add(
+      Marker(
+        point: route.path.last,
+        width: 40,
+        height: 40,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.stop, color: Colors.white, size: 20),
+        ),
+      ),
+    );
+
+    return markers;
+  }
+
   @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
@@ -332,6 +452,38 @@ class _SearchScreenState extends State<SearchScreen> {
                         ),
                       ),
                     ],
+                  ),
+                // Route Polylines
+                if (_visibleRouteIds.isNotEmpty)
+                  PolylineLayer(
+                    polylines: _routes
+                        .where(
+                          (route) =>
+                              _visibleRouteIds.contains(route.id) &&
+                              route.path.isNotEmpty,
+                        )
+                        .map((route) {
+                          return Polyline(
+                            points: route.path,
+                            color: _parseColor(route.color) ?? Colors.blue,
+                            strokeWidth: 4.0,
+                            borderStrokeWidth: 2.0,
+                            borderColor: Colors.white,
+                          );
+                        })
+                        .toList(),
+                  ),
+                // Route Start/End Markers
+                if (_visibleRouteIds.isNotEmpty)
+                  MarkerLayer(
+                    markers: _routes
+                        .where(
+                          (route) =>
+                              _visibleRouteIds.contains(route.id) &&
+                              route.path.isNotEmpty,
+                        )
+                        .expand((route) => _buildRouteMarkers(route))
+                        .toList(),
                   ),
               ],
             ),
@@ -569,6 +721,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     Container(
                       margin: const EdgeInsets.symmetric(horizontal: 16),
                       padding: const EdgeInsets.all(20),
+                      constraints: const BoxConstraints(maxHeight: 300),
                       decoration: BoxDecoration(
                         color: AppColors.white,
                         borderRadius: BorderRadius.circular(20),
@@ -583,28 +736,118 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            'List of Routes',
-                            style: GoogleFonts.slackey(
-                              fontSize: 18,
-                              color: AppColors.textPrimary,
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'List of Routes',
+                                style: GoogleFonts.slackey(
+                                  fontSize: 18,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              if (_isLoadingRoutes)
+                                const Padding(
+                                  padding: EdgeInsets.only(left: 12),
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           const SizedBox(height: 16),
-                          // Route Items
-                          ..._routes.map(
-                            (route) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: RouteListItem(
-                                routeName: route['name'],
-                                isAvailable: route['available'],
+                          // Route Items - Dynamic from API
+                          if (_isLoadingRoutes)
+                            const Padding(
+                              padding: EdgeInsets.all(20),
+                              child: CircularProgressIndicator(),
+                            )
+                          else if (_routesErrorMessage != null)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.wifi_off,
+                                    color: AppColors.warning,
+                                    size: 32,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _routesErrorMessage!,
+                                    style: TextStyle(color: AppColors.warning),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextButton.icon(
+                                    onPressed: _fetchRoutes,
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else if (_routes.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                'No routes available',
+                                style: TextStyle(color: AppColors.gray),
+                              ),
+                            )
+                          else
+                            Flexible(
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: _routes.length,
+                                itemBuilder: (context, index) {
+                                  final route = _routes[index];
+                                  final isVisible = _visibleRouteIds.contains(
+                                    route.id,
+                                  );
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: RouteListItem(
+                                      routeName: route.displayName,
+                                      isAvailable: route.isAvailable,
+                                      isRouteVisible: isVisible,
+                                      onTap: () {
+                                        debugPrint(
+                                          'Route ${route.displayName} tapped, ID: ${route.id}',
+                                        );
+                                        setState(() {
+                                          if (isVisible) {
+                                            debugPrint(
+                                              'Hiding route ${route.id}',
+                                            );
+                                            _visibleRouteIds.remove(route.id);
+                                          } else {
+                                            debugPrint(
+                                              'Showing route ${route.id}, path length: ${route.path.length}',
+                                            );
+                                            _visibleRouteIds.add(route.id);
+                                            // Fit map to show route if it has path
+                                            if (route.path.isNotEmpty) {
+                                              _fitMapToRoute(route);
+                                            }
+                                          }
+                                          debugPrint(
+                                            'Visible routes: $_visibleRouteIds',
+                                          );
+                                        });
+                                      },
+                                    ),
+                                  );
+                                },
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ),
-                  const SizedBox(height: 80), // Space for bottom nav
+                  const SizedBox(height: 20), // Space for bottom nav
                 ],
               ),
             ),

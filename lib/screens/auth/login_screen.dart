@@ -1,6 +1,5 @@
 // Login Screen
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../main_navigation.dart';
 import 'sign_in_screen.dart';
