@@ -9,11 +9,17 @@ import 'profile/profile_screen.dart';
 class MainNavigation extends StatefulWidget {
   final int initialIndex;
   final int? autoSelectRouteId;
+  final double? landmarkLatitude;
+  final double? landmarkLongitude;
+  final String? landmarkName;
 
   const MainNavigation({
     super.key,
     this.initialIndex = 0,
     this.autoSelectRouteId,
+    this.landmarkLatitude,
+    this.landmarkLongitude,
+    this.landmarkName,
   });
 
   @override
@@ -23,24 +29,43 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   late int _currentIndex;
   int? _autoSelectRouteId;
+  double? _landmarkLatitude;
+  double? _landmarkLongitude;
+  String? _landmarkName;
+  int _searchScreenKey = 0;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _autoSelectRouteId = widget.autoSelectRouteId;
+    _landmarkLatitude = widget.landmarkLatitude;
+    _landmarkLongitude = widget.landmarkLongitude;
+    _landmarkName = widget.landmarkName;
+
+    // Increment key only if landmark data is provided
+    if (_landmarkLatitude != null || _autoSelectRouteId != null) {
+      _searchScreenKey++;
+    }
   }
 
   List<Widget> get _screens => [
     const HomeScreen(key: ValueKey('home')),
     SearchScreen(
-      key: const ValueKey('search'),
+      key: ValueKey('search_$_searchScreenKey'),
       autoSelectRouteId: _autoSelectRouteId,
+      landmarkLatitude: _landmarkLatitude,
+      landmarkLongitude: _landmarkLongitude,
+      landmarkName: _landmarkName,
       onAutoSelectionComplete: () {
-        // Clear the route ID after auto-selection to prevent it from happening again
+        // Clear the route ID and landmark data after auto-selection
+        // Don't increment key here - keep SearchScreen instance alive
         if (mounted) {
           setState(() {
             _autoSelectRouteId = null;
+            _landmarkLatitude = null;
+            _landmarkLongitude = null;
+            _landmarkName = null;
           });
         }
       },

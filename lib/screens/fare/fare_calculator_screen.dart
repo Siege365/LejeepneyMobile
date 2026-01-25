@@ -16,18 +16,20 @@ class FareCalculatorScreen extends StatefulWidget {
 }
 
 class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
-  double _calculatedFare = 0;
-  double? _mapDistance;
-  String? _mapFromArea;
-  String? _mapToArea;
+  // Static variables to persist data during app session (but not after restart)
+  static double _calculatedFare = 0;
+  static double? _mapDistance;
+  static String? _mapFromArea;
+  static String? _mapToArea;
 
   // Route matching from map
-  List<JeepneyRoute> _suggestedRoutes = [];
-  Map<int, double> _routeMatchPercentages = {}; // routeId -> matchPercentage
-  List<MultiTransferRoute> _multiTransferRoutes = [];
-  List<SuggestedRoute> _hybridSuggestedRoutes =
+  static List<JeepneyRoute> _suggestedRoutes = [];
+  static Map<int, double> _routeMatchPercentages =
+      {}; // routeId -> matchPercentage
+  static List<MultiTransferRoute> _multiTransferRoutes = [];
+  static List<SuggestedRoute> _hybridSuggestedRoutes =
       []; // New: hybrid routing results
-  HybridRoutingResult? _hybridResult; // New: full hybrid result
+  static HybridRoutingResult? _hybridResult; // New: full hybrid result
   bool _isLoadingRoutes = false;
 
   @override
@@ -53,6 +55,41 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                 'Calculate your jeepney fare',
                 style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
               ),
+              const SizedBox(height: 16),
+
+              // Default state when not used
+              if (_calculatedFare == 0)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.map,
+                        size: 64,
+                        color: AppColors.darkBlue.withOpacity(0.5),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No Route Selected',
+                        style: GoogleFonts.slackey(
+                          fontSize: 20,
+                          color: AppColors.darkBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Use the map calculator below to select your origin and destination points',
+                        style: TextStyle(fontSize: 14, color: AppColors.gray),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 16),
 
               // Map Calculator Button
@@ -606,184 +643,154 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
   }
 
   Widget _buildRouteCard(int rank, JeepneyRoute route) {
-    // Parse route color
-    Color routeColor = AppColors.darkBlue;
-    if (route.color != null) {
-      try {
-        routeColor = Color(int.parse(route.color!.replaceFirst('#', '0xFF')));
-      } catch (_) {}
-    }
+    final rankColors = [
+      Colors.amber[700]!, // Gold
+      Colors.grey[600]!, // Silver
+      Colors.brown[600]!, // Bronze
+    ];
+    final rankIcons = [Icons.looks_one, Icons.looks_two, Icons.looks_3];
 
-    // Get rank color (gold, silver, bronze, default)
-    Color rankColor;
-    IconData rankIcon;
-    if (rank == 1) {
-      rankColor = const Color(0xFFFFD700); // Gold
-      rankIcon = Icons.emoji_events;
-    } else if (rank == 2) {
-      rankColor = const Color(0xFFC0C0C0); // Silver
-      rankIcon = Icons.workspace_premium;
-    } else if (rank == 3) {
-      rankColor = const Color(0xFFCD7F32); // Bronze
-      rankIcon = Icons.military_tech;
-    } else {
-      rankColor = AppColors.gray.withOpacity(0.6);
-      rankIcon = Icons.star_border;
-    }
-
-    // Get match percentage if available
-    final matchPercentage = _routeMatchPercentages[route.id];
-
-    return GestureDetector(
-      onTap: () {
-        // Navigate to search page with navbar intact and auto-select route
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                MainNavigation(initialIndex: 1, autoSelectRouteId: route.id),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: rank <= 3
-              ? rankColor.withOpacity(0.08)
-              : AppColors.lightGray.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: rank <= 3
-                ? rankColor.withOpacity(0.3)
-                : AppColors.lightGray.withOpacity(0.5),
-            width: rank == 1 ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            // Rank badge
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: rankColor,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: rank <= 3
-                    ? [
-                        BoxShadow(
-                          color: rankColor.withOpacity(0.4),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Center(
-                child: rank <= 3
-                    ? Icon(rankIcon, color: Colors.white, size: 22)
-                    : Text(
-                        '$rank',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-              ),
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          // Navigate to search page with route selected
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  MainNavigation(initialIndex: 1, autoSelectRouteId: route.id),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          route.name,
-                          style: GoogleFonts.slackey(
-                            fontWeight: FontWeight.w600,
+                  if (rank <= 3)
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: rankColors[rank - 1].withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        rankIcons[rank - 1],
+                        size: 18,
+                        color: rankColors[rank - 1],
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Direct',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    route.fareDisplay,
+                    style: GoogleFonts.slackey(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkBlue,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.darkBlue,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(
+                      Icons.directions_bus,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Ride: ${route.routeNumber}',
+                          style: const TextStyle(
                             fontSize: 14,
-                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.darkBlue,
+                          ),
+                        ),
+                        Text(
+                          route.name,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[600],
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      // Match percentage badge
-                      if (matchPercentage != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _getMatchColor(matchPercentage),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${matchPercentage.toStringAsFixed(0)}%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Text(
-                        route.fareDisplay,
-                        style: GoogleFonts.slackey(
-                          color: AppColors.success,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (route.distanceKm != null) ...[
-                        const SizedBox(width: 12),
-                        Icon(Icons.straighten, size: 13, color: AppColors.gray),
-                        const SizedBox(width: 2),
-                        Text(
-                          route.distanceDisplay,
-                          style: TextStyle(color: AppColors.gray, fontSize: 12),
-                        ),
                       ],
-                      if (route.terminal != null) ...[
-                        const SizedBox(width: 12),
-                        Icon(
-                          Icons.location_on,
-                          size: 13,
-                          color: AppColors.gray,
-                        ),
-                        const SizedBox(width: 2),
-                        Expanded(
-                          child: Text(
-                            route.terminal!,
-                            style: TextStyle(
-                              color: AppColors.gray,
-                              fontSize: 11,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ],
               ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: AppColors.gray.withOpacity(0.5),
-              size: 22,
-            ),
-          ],
+              const Divider(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (route.distanceKm != null)
+                    _buildSummaryItem(Icons.straighten, route.distanceDisplay),
+                  if (route.terminal != null)
+                    Expanded(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            size: 14,
+                            color: Colors.grey[600],
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              route.terminal!,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[700],
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -798,317 +805,185 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
 
   /// Build a card for multi-transfer routes
   Widget _buildMultiTransferCard(int rank, MultiTransferRoute multiRoute) {
-    // Get rank color
-    Color rankColor;
-    IconData rankIcon;
-    if (rank == 1) {
-      rankColor = const Color(0xFFFFD700); // Gold
-      rankIcon = Icons.emoji_events;
-    } else if (rank == 2) {
-      rankColor = const Color(0xFFC0C0C0); // Silver
-      rankIcon = Icons.workspace_premium;
-    } else if (rank == 3) {
-      rankColor = const Color(0xFFCD7F32); // Bronze
-      rankIcon = Icons.military_tech;
-    } else {
-      rankColor = AppColors.gray.withOpacity(0.6);
-      rankIcon = Icons.star_border;
-    }
+    final rankColors = [
+      Colors.amber[700]!, // Gold
+      Colors.grey[600]!, // Silver
+      Colors.brown[600]!, // Bronze
+    ];
+    final rankIcons = [Icons.looks_one, Icons.looks_two, Icons.looks_3];
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: rank <= 3
-            ? rankColor.withOpacity(0.08)
-            : AppColors.lightGray.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: rank <= 3
-              ? rankColor.withOpacity(0.3)
-              : AppColors.lightGray.withOpacity(0.5),
-          width: rank == 1 ? 2 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row with rank and transfer count
-          Row(
-            children: [
-              // Rank badge
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: rankColor,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: rank <= 3
-                      ? [
-                          BoxShadow(
-                            color: rankColor.withOpacity(0.4),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Center(
-                  child: rank <= 3
-                      ? Icon(rankIcon, color: Colors.white, size: 22)
-                      : Text(
-                          '$rank',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          // Navigate to search with first route of the multi-transfer
+          if (multiRoute.segments.isNotEmpty) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MainNavigation(
+                  initialIndex: 1,
+                  autoSelectRouteId: multiRoute.segments.first.route.id,
                 ),
               ),
-              const SizedBox(width: 12),
-              // Transfer count badge
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+            );
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header row with rank and transfer count
+              Row(
+                children: [
+                  // Rank badge
+                  if (rank <= 3)
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.orange.withOpacity(0.3),
+                        color: rankColors[rank - 1].withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        rankIcons[rank - 1],
+                        size: 18,
+                        color: rankColors[rank - 1],
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${multiRoute.transferCount} Transfer${multiRoute.transferCount > 1 ? 's' : ''}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange[700],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '₱${multiRoute.totalFare.toStringAsFixed(2)}',
+                    style: GoogleFonts.slackey(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkBlue,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+              // Route segments
+              ...multiRoute.segments.asMap().entries.map((entry) {
+                final segIndex = entry.key;
+                final segment = entry.value;
+                final isLast = segIndex == multiRoute.segments.length - 1;
+
+                return Padding(
+                  padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.darkBlue,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.directions_bus,
+                          size: 16,
+                          color: Colors.white,
                         ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.swap_horiz,
-                            size: 16,
-                            color: Colors.orange,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${multiRoute.transferCount} Transfer${multiRoute.transferCount > 1 ? 's' : ''}',
-                            style: GoogleFonts.slackey(
-                              fontSize: 11,
-                              color: Colors.orange,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Ride: ${segment.route.routeNumber}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.darkBlue,
+                              ),
                             ),
-                          ),
-                        ],
+                            Text(
+                              segment.route.name,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[600],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    // Route sequence
-                    Text(
-                      multiRoute.routeNames,
-                      style: GoogleFonts.slackey(
-                        fontSize: 13,
-                        color: AppColors.textPrimary,
+                      const SizedBox(width: 8),
+                      Text(
+                        '₱${segment.fare.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.darkBlue,
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                );
+              }),
+              const Divider(height: 20),
+              // Summary
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildSummaryItem(
+                    Icons.straighten,
+                    '${multiRoute.totalDistanceKm.toStringAsFixed(1)} km',
+                  ),
+                  _buildSummaryItem(
+                    Icons.directions_walk,
+                    '${multiRoute.totalWalkingDistanceMeters.toStringAsFixed(0)}m walk',
+                  ),
+                ],
               ),
             ],
           ),
-
-          const SizedBox(height: 12),
-
-          // Route segments details
-          ...multiRoute.segments.asMap().entries.map((entry) {
-            final segIndex = entry.key;
-            final segment = entry.value;
-            final isLast = segIndex == multiRoute.segments.length - 1;
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Segment row
-                Row(
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: AppColors.darkBlue.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${segIndex + 1}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.darkBlue,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            segment.route.name,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          Text(
-                            'Route ${segment.route.routeNumber} • ₱${segment.fare.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.gray,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Transfer point (if not last segment)
-                if (!isLast && segIndex < multiRoute.transferPoints.length)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 14, top: 8, bottom: 8),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 2,
-                          height: 20,
-                          color: Colors.orange.withOpacity(0.5),
-                        ),
-                        const SizedBox(width: 18),
-                        Icon(
-                          Icons.directions_walk,
-                          size: 16,
-                          color: Colors.orange,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Walk to ${multiRoute.transferPoints[segIndex].landmarkName} (${multiRoute.transferPoints[segIndex].walkingDistanceMeters.toStringAsFixed(0)}m)',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.orange,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            );
-          }),
-
-          const SizedBox(height: 12),
-
-          // Summary row
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.payments, size: 18, color: AppColors.success),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Total: ₱${multiRoute.totalFare.toStringAsFixed(2)}',
-                      style: GoogleFonts.slackey(
-                        fontSize: 14,
-                        color: AppColors.success,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Icon(Icons.straighten, size: 14, color: AppColors.gray),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${multiRoute.totalDistanceKm.toStringAsFixed(1)} km',
-                      style: TextStyle(fontSize: 12, color: AppColors.gray),
-                    ),
-                    const SizedBox(width: 10),
-                    Icon(
-                      Icons.directions_walk,
-                      size: 14,
-                      color: AppColors.gray,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${multiRoute.totalWalkingDistanceMeters.toStringAsFixed(0)}m',
-                      style: TextStyle(fontSize: 12, color: AppColors.gray),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  /// Build a card for hybrid routing results (new algorithm)
+  /// Build a card for hybrid routing results (matching search screen UI)
   Widget _buildHybridRouteCard(int rank, SuggestedRoute suggestedRoute) {
-    // Get rank color
-    Color rankColor;
-    IconData rankIcon;
-    if (rank == 1) {
-      rankColor = const Color(0xFFFFD700); // Gold
-      rankIcon = Icons.emoji_events;
-    } else if (rank == 2) {
-      rankColor = const Color(0xFFC0C0C0); // Silver
-      rankIcon = Icons.workspace_premium;
-    } else if (rank == 3) {
-      rankColor = const Color(0xFFCD7F32); // Bronze
-      rankIcon = Icons.military_tech;
-    } else {
-      rankColor = AppColors.gray.withOpacity(0.6);
-      rankIcon = Icons.format_list_numbered;
-    }
+    // Get rank colors and icons
+    final rankColors = [
+      Colors.amber[700]!, // Gold
+      Colors.grey[600]!, // Silver
+      Colors.brown[600]!, // Bronze
+    ];
+    final rankIcons = [Icons.looks_one, Icons.looks_two, Icons.looks_3];
 
-    final isDirectRoute = suggestedRoute.transferCount == 0;
     final routes = suggestedRoute.routes;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: rankColor.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: Border.all(
-          color: rank <= 3 ? rankColor.withOpacity(0.5) : Colors.transparent,
-          width: rank <= 3 ? 2 : 0,
-        ),
-      ),
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         onTap: routes.isNotEmpty
             ? () {
                 // Navigate to search screen with first route selected
@@ -1123,364 +998,182 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                 );
               }
             : null,
-        child: Column(
-          children: [
-            // Header row with rank and route summary
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Rank and route type
+              Row(
                 children: [
-                  // Rank badge
+                  if (rank <= 3)
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: rankColors[rank - 1].withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        rankIcons[rank - 1],
+                        size: 18,
+                        color: rankColors[rank - 1],
+                      ),
+                    ),
+                  const SizedBox(width: 8),
                   Container(
-                    width: 40,
-                    height: 40,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: rankColor,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: rankColor.withOpacity(0.4),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
+                      color: suggestedRoute.transferCount == 0
+                          ? Colors.green.withOpacity(0.1)
+                          : Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      suggestedRoute.transferCount == 0
+                          ? 'Direct'
+                          : '${suggestedRoute.transferCount} Transfer${suggestedRoute.transferCount > 1 ? 's' : ''}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: suggestedRoute.transferCount == 0
+                            ? Colors.green[700]
+                            : Colors.orange[700],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '\u20b1${suggestedRoute.totalFare.toStringAsFixed(2)}',
+                    style: GoogleFonts.slackey(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkBlue,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Route segments
+              ...suggestedRoute.segments.asMap().entries.map((entry) {
+                final segment = entry.value;
+                final isLast = entry.key == suggestedRoute.segments.length - 1;
+
+                if (segment.type == JourneySegmentType.walking) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.directions_walk,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Walk ${(segment.distanceKm * 1000).toStringAsFixed(0)}m',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
                         ),
                       ],
                     ),
-                    child: Center(
-                      child: rank <= 3
-                          ? Icon(rankIcon, color: Colors.white, size: 22)
-                          : Text(
-                              '$rank',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-
-                  // Route info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  );
+                } else if (segment.type == JourneySegmentType.jeepneyRide) {
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            // Transfer count badge
-                            if (!isDirectRoute)
-                              Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.swap_horiz,
-                                      size: 12,
-                                      color: Colors.orange,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${suggestedRoute.transferCount} transfer${suggestedRoute.transferCount > 1 ? 's' : ''}',
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.orange,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            // Direct route badge
-                            if (isDirectRoute)
-                              Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.check_circle,
-                                      size: 12,
-                                      color: Colors.green,
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Direct',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppColors.darkBlue,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.directions_bus,
+                            size: 16,
+                            color: Colors.white,
+                          ),
                         ),
-                        const SizedBox(height: 6),
-                        // Route names
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Ride: ${segment.route?.routeNumber ?? 'Jeepney'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.darkBlue,
+                                ),
+                              ),
+                              if (segment.route?.name != null)
+                                Text(
+                                  segment.route!.name,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey[600],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Text(
-                          suggestedRoute.routeNames.isNotEmpty
-                              ? suggestedRoute.routeNames
-                              : 'Route unavailable',
-                          style: GoogleFonts.slackey(
-                            fontSize: 15,
+                          '\u20b1${segment.fare.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
                             color: AppColors.darkBlue,
                           ),
                         ),
                       ],
                     ),
+                  );
+                }
+                return const SizedBox.shrink();
+              }).toList(),
+              const Divider(height: 20),
+              // Summary
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildSummaryItem(
+                    Icons.access_time,
+                    '~${suggestedRoute.estimatedTimeMinutes.toStringAsFixed(0)} min',
                   ),
-
-                  // Fare
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '₱${suggestedRoute.totalFare.toStringAsFixed(2)}',
-                      style: GoogleFonts.slackey(
-                        fontSize: 14,
-                        color: AppColors.success,
-                      ),
-                    ),
+                  _buildSummaryItem(
+                    Icons.directions_walk,
+                    '${(suggestedRoute.totalWalkingDistanceKm * 1000).toStringAsFixed(0)}m walk',
+                  ),
+                  _buildSummaryItem(
+                    Icons.straighten,
+                    '${suggestedRoute.totalDistanceKm.toStringAsFixed(1)} km',
                   ),
                 ],
               ),
-            ),
-
-            // Segment details
-            if (suggestedRoute.segments.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: Column(
-                  children: [
-                    ...suggestedRoute.segments.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final segment = entry.value;
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: segment.isWalking || segment.isTransfer
-                              ? Colors.blue.withOpacity(0.05)
-                              : AppColors.lightGray.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: segment.isWalking || segment.isTransfer
-                                ? Colors.blue.withOpacity(0.2)
-                                : Colors.transparent,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            // Step indicator
-                            Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: segment.isWalking || segment.isTransfer
-                                    ? Colors.blue
-                                    : AppColors.darkBlue,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
-                                child: segment.isWalking || segment.isTransfer
-                                    ? const Icon(
-                                        Icons.directions_walk,
-                                        size: 14,
-                                        color: Colors.white,
-                                      )
-                                    : Text(
-                                        '${index + 1}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-
-                            // Segment info
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    segment.isWalking
-                                        ? 'Walk to ${segment.endName ?? 'stop'}'
-                                        : segment.isTransfer
-                                        ? 'Transfer at ${segment.endName ?? 'transfer point'}'
-                                        : 'Take ${segment.route?.routeNumber ?? 'Route'}',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                      color:
-                                          segment.isWalking ||
-                                              segment.isTransfer
-                                          ? Colors.blue
-                                          : AppColors.darkBlue,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.straighten,
-                                        size: 12,
-                                        color: AppColors.gray,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        segment.distanceKm < 1
-                                            ? '${(segment.distanceKm * 1000).toStringAsFixed(0)}m'
-                                            : '${segment.distanceKm.toStringAsFixed(1)}km',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.gray,
-                                        ),
-                                      ),
-                                      if (!segment.isWalking &&
-                                          !segment.isTransfer) ...[
-                                        const SizedBox(width: 12),
-                                        Icon(
-                                          Icons.payments,
-                                          size: 12,
-                                          color: AppColors.success,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '₱${segment.fare.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.success,
-                                          ),
-                                        ),
-                                      ],
-                                      const SizedBox(width: 12),
-                                      Icon(
-                                        Icons.timer,
-                                        size: 12,
-                                        color: AppColors.gray,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '~${segment.estimatedTimeMinutes.toStringAsFixed(0)} min',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.gray,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-
-                    // Summary row
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.darkBlue.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          // Total distance
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.straighten,
-                                size: 14,
-                                color: AppColors.darkBlue,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${suggestedRoute.totalDistanceKm.toStringAsFixed(1)} km',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.darkBlue,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                          // Walking distance
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.directions_walk,
-                                size: 14,
-                                color: Colors.blue,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${(suggestedRoute.totalWalkingDistanceKm * 1000).toStringAsFixed(0)}m',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.blue,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                          // Est. time
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.timer,
-                                size: 14,
-                                color: AppColors.gray,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '~${suggestedRoute.estimatedTimeMinutes.toStringAsFixed(0)} min',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.gray,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSummaryItem(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: Colors.grey[600]),
+        const SizedBox(width: 4),
+        Text(text, style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+      ],
     );
   }
 

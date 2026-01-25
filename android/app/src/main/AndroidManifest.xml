@@ -7,7 +7,8 @@
     <application
         android:label="Lejeepney"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
         
         <!-- Google Maps API Key - Replace with your own key -->
         <meta-data

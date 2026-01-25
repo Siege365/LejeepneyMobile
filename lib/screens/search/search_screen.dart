@@ -15,11 +15,17 @@ import '../../utils/transit_routing/transit_routing.dart';
 
 class SearchScreen extends StatefulWidget {
   final int? autoSelectRouteId;
+  final double? landmarkLatitude;
+  final double? landmarkLongitude;
+  final String? landmarkName;
   final VoidCallback? onAutoSelectionComplete;
 
   const SearchScreen({
     super.key,
     this.autoSelectRouteId,
+    this.landmarkLatitude,
+    this.landmarkLongitude,
+    this.landmarkName,
     this.onAutoSelectionComplete,
   });
 
@@ -91,7 +97,57 @@ class _SearchScreenState extends State<SearchScreen> {
     // Handle auto-selection after routes are loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleAutoSelection();
+      _handleLandmarkNavigation();
     });
+  }
+
+  /// Handle landmark navigation from Landmarks screen
+  void _handleLandmarkNavigation() async {
+    if (widget.landmarkLatitude == null || widget.landmarkLongitude == null) {
+      return;
+    }
+
+    // Wait for location to be ready
+    while (_isLoadingLocation) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    // Make sure we have current location
+    if (_currentLocation == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to get your location. Please enable GPS.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      widget.onAutoSelectionComplete?.call();
+      return;
+    }
+
+    final landmarkLocation = LatLng(
+      widget.landmarkLatitude!,
+      widget.landmarkLongitude!,
+    );
+    final landmarkName = widget.landmarkName ?? 'Selected Location';
+
+    if (mounted) {
+      setState(() {
+        _searchedLocation = landmarkLocation;
+        _searchedPlaceName = landmarkName;
+        _searchController.text = landmarkName;
+        _currentAddress = landmarkName;
+      });
+
+      // Zoom to landmark location
+      _mapController.move(landmarkLocation, 16);
+
+      // Delay clearing parent state to allow SearchScreen to maintain its state
+      Future.delayed(const Duration(milliseconds: 500), () {
+        widget.onAutoSelectionComplete?.call();
+      });
+    }
   }
 
   void _handleAutoSelection() async {
@@ -255,34 +311,75 @@ class _SearchScreenState extends State<SearchScreen> {
     _searchFocusNode.unfocus();
   }
 
+  Future<void> _handleMapTap(LatLng point) async {
+    try {
+      // Use reverse geocoding to get place information at tapped location
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?'
+        'lat=${point.latitude}&'
+        'lon=${point.longitude}&'
+        'format=json&'
+        'addressdetails=1',
+      );
+
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'Lejeepney App'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        if (data != null && data['display_name'] != null) {
+          setState(() {
+            _searchedLocation = point;
+            _searchedPlaceName = data['display_name'];
+            _currentAddress = data['display_name'];
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching place info: $e');
+    }
+  }
+
   void _showDirectionsModal() async {
+    if (!mounted) return;
+
     if (_searchedLocation == null) return;
 
     // Check if we have current location
     if (_currentLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Getting your location...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Getting your location...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
       return;
     }
 
     // Show loading modal first
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isDismissible: false,
-      isScrollControlled: true,
-      builder: (context) => _buildRouteCalculationModal(),
-    );
+    if (mounted) {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isDismissible: true,
+        enableDrag: true,
+        isScrollControlled: true,
+        builder: (context) => _buildRouteCalculationModal(),
+      );
 
-    // Calculate route
-    await _calculateRoute();
+      // Calculate route
+      await _calculateRoute();
+    }
   }
 
   Future<void> _calculateRoute() async {
+    if (!mounted) return;
+
     setState(() {
       _isCalculatingRoute = true;
     });
@@ -296,25 +393,45 @@ class _SearchScreenState extends State<SearchScreen> {
         osrmPath: null, // Let it calculate without OSRM for now
       );
 
+      if (!mounted) return;
+
       setState(() {
         _calculatedRoutes = result.suggestedRoutes;
         _hybridResult = result;
         _isCalculatingRoute = false;
       });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _isCalculatingRoute = false;
       });
-      if (mounted) {
+
+      if (mounted && Navigator.canPop(context)) {
         Navigator.pop(context); // Close the modal
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error calculating route: $e')));
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Network error. Please check your connection.'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _showDirectionsModal(),
+            ),
+          ),
+        );
       }
     }
   }
 
   Widget _buildRouteCalculationModal() {
+    if (!mounted) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.white,
@@ -358,13 +475,15 @@ class _SearchScreenState extends State<SearchScreen> {
                         icon: const Icon(Icons.close),
                         onPressed: () {
                           Navigator.pop(context);
-                          setState(() {
-                            _searchedLocation = null;
-                            _searchedPlaceName = null;
-                            _searchController.clear();
-                            _currentAddress = _originalLocationAddress;
-                            _visibleRouteIds.clear();
-                          });
+                          if (mounted) {
+                            setState(() {
+                              _searchedLocation = null;
+                              _searchedPlaceName = null;
+                              _searchController.clear();
+                              _currentAddress = _originalLocationAddress;
+                              _visibleRouteIds.clear();
+                            });
+                          }
                         },
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
@@ -875,8 +994,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
     if (route.path.length < 2) return arrows;
 
-    // Calculate arrow positions every 500 meters
-    List<ArrowPoint> arrowPoints = calculateArrowPoints(route.path, 500.0);
+    // Calculate arrow positions every 1000 meters (1 km)
+    List<ArrowPoint> arrowPoints = calculateArrowPoints(route.path, 1000.0);
 
     Color routeColor = parseHexColor(route.color) ?? Colors.blue;
     Color arrowColor = getContrastColor(routeColor);
@@ -1053,6 +1172,7 @@ class _SearchScreenState extends State<SearchScreen> {
               options: MapOptions(
                 initialCenter: LatLng(7.0731, 125.6128), // Davao City default
                 initialZoom: 14.0,
+                onLongPress: (tapPosition, point) => _handleMapTap(point),
               ),
               children: [
                 TileLayer(
@@ -1379,7 +1499,7 @@ class _SearchScreenState extends State<SearchScreen> {
               child: FloatingActionButton(
                 onPressed: _recenterToUserLocation,
                 backgroundColor: AppColors.white,
-                child: const Icon(Icons.my_location, color: AppColors.darkBlue),
+                child: const Icon(Icons.my_location, color: Colors.blue),
               ),
             ),
 

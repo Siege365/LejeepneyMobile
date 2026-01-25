@@ -56,8 +56,9 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
   List<SuggestedRoute> _suggestedRoutes = []; // New: hybrid routing results
   HybridRoutingResult? _hybridResult; // New: full hybrid result
   final ApiService _apiService = ApiService();
-  final HybridTransitRouter _hybridRouter =
-      HybridTransitRouter(); // New: hybrid router
+  final HybridTransitRouter _hybridRouter = HybridTransitRouter(
+    config: const HybridRoutingConfig(maxResults: 5, maxTransfers: 2),
+  ); // New: hybrid router with config matching search screen
 
   @override
   void initState() {

@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../constants/app_colors.dart';
 import '../../models/landmark.dart';
 import '../../services/api_service.dart';
+import '../main_navigation.dart';
 
 class LandmarksScreen extends StatefulWidget {
   const LandmarksScreen({super.key});
@@ -682,20 +683,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'View details for ${landmark.name}',
-                              ),
-                              backgroundColor: AppColors.darkBlue,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          );
-                        },
+                        onPressed: () => _showLandmarkPreviewModal(landmark),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.success,
                           foregroundColor: AppColors.white,
@@ -731,6 +719,381 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Show landmark preview modal with swipeable images
+  void _showLandmarkPreviewModal(Landmark landmark) {
+    // Combine icon URL and gallery URLs for the image carousel
+    final List<String> allImages = [];
+    if (landmark.iconUrl != null && landmark.iconUrl!.isNotEmpty) {
+      allImages.add(landmark.iconUrl!);
+    }
+    allImages.addAll(landmark.galleryUrls);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _LandmarkPreviewModal(
+        landmark: landmark,
+        images: allImages,
+        getCategoryIcon: _getCategoryIcon,
+        onGetDirections: () {
+          Navigator.pop(context); // Close modal
+          // Navigate to search screen with landmark coordinates
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MainNavigation(
+                initialIndex: 1, // Search tab
+                landmarkLatitude: landmark.latitude,
+                landmarkLongitude: landmark.longitude,
+                landmarkName: landmark.name,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Stateful widget for the landmark preview modal
+class _LandmarkPreviewModal extends StatefulWidget {
+  final Landmark landmark;
+  final List<String> images;
+  final IconData Function(String) getCategoryIcon;
+  final VoidCallback onGetDirections;
+
+  const _LandmarkPreviewModal({
+    required this.landmark,
+    required this.images,
+    required this.getCategoryIcon,
+    required this.onGetDirections,
+  });
+
+  @override
+  State<_LandmarkPreviewModal> createState() => _LandmarkPreviewModalState();
+}
+
+class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final landmark = widget.landmark;
+    final hasImages = widget.images.isNotEmpty;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return Container(
+      height: screenHeight * 0.75,
+      decoration: const BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          // Drag handle
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.gray.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Image carousel
+          Expanded(
+            flex: 5,
+            child: hasImages
+                ? Stack(
+                    children: [
+                      // PageView for swipeable images
+                      PageView.builder(
+                        controller: _pageController,
+                        itemCount: widget.images.length,
+                        onPageChanged: (index) {
+                          setState(() => _currentPage = index);
+                        },
+                        itemBuilder: (context, index) {
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.network(
+                                widget.images[index],
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, progress) {
+                                  if (progress == null) return child;
+                                  return Container(
+                                    color: AppColors.lightGray.withOpacity(0.3),
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.darkBlue,
+                                        value:
+                                            progress.expectedTotalBytes != null
+                                            ? progress.cumulativeBytesLoaded /
+                                                  progress.expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                      color: AppColors.primary.withOpacity(0.3),
+                                      child: Icon(
+                                        widget.getCategoryIcon(
+                                          landmark.category,
+                                        ),
+                                        size: 60,
+                                        color: AppColors.darkBlue,
+                                      ),
+                                    ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
+                      // Page indicator dots
+                      if (widget.images.length > 1)
+                        Positioned(
+                          bottom: 16,
+                          left: 0,
+                          right: 0,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(
+                              widget.images.length,
+                              (index) => AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                width: _currentPage == index ? 24 : 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: _currentPage == index
+                                      ? AppColors.darkBlue
+                                      : AppColors.gray.withOpacity(0.4),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  )
+                : Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        widget.getCategoryIcon(landmark.category),
+                        size: 80,
+                        color: AppColors.darkBlue,
+                      ),
+                    ),
+                  ),
+          ),
+
+          // Content section
+          Expanded(
+            flex: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Category and featured badges
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          landmark.categoryDisplayName.toUpperCase(),
+                          style: GoogleFonts.slackey(
+                            fontSize: 10,
+                            color: AppColors.darkBlue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (landmark.isFeatured) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.success,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.star,
+                                size: 12,
+                                color: AppColors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'FEATURED',
+                                style: GoogleFonts.slackey(
+                                  fontSize: 10,
+                                  color: AppColors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const Spacer(),
+                      // Image count indicator
+                      if (widget.images.length > 1)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.gray.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.photo_library,
+                                size: 14,
+                                color: AppColors.gray,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${widget.images.length} photos',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.gray,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Landmark name
+                  Text(
+                    landmark.name,
+                    style: GoogleFonts.slackey(
+                      fontSize: 22,
+                      color: AppColors.textPrimary,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+
+                  if (landmark.description != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            landmark.description!,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.gray,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  const Spacer(),
+
+                  // Get Directions Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: widget.onGetDirections,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.darkBlue,
+                        foregroundColor: AppColors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.directions, size: 20),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Get Directions',
+                            style: GoogleFonts.slackey(
+                              fontSize: 16,
+                              color: AppColors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
