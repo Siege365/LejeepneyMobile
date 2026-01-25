@@ -86,6 +86,33 @@ class Landmark {
     }
   }
 
+  // Create a copy with updated fields
+  Landmark copyWith({
+    int? id,
+    String? name,
+    String? category,
+    String? description,
+    double? latitude,
+    double? longitude,
+    String? iconUrl,
+    List<String>? galleryUrls,
+    bool? isFeatured,
+    double? distance,
+  }) {
+    return Landmark(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      description: description ?? this.description,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      iconUrl: iconUrl ?? this.iconUrl,
+      galleryUrls: galleryUrls ?? this.galleryUrls,
+      isFeatured: isFeatured ?? this.isFeatured,
+      distance: distance ?? this.distance,
+    );
+  }
+
   // Helper to convert category to API category
   static String toCategoryApi(String displayCategory) {
     switch (displayCategory.toLowerCase()) {

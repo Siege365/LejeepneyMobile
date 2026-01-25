@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
+import '../../utils/page_transitions.dart';
 import '../../widgets/travel_history_item.dart';
+import '../main_navigation.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -50,18 +52,21 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
               // Map Card - Look for your location (Clickable)
               InkWell(
                 onTap: () {
-                  // Navigate to Search page (index 1 in bottom nav)
-                  DefaultTabController.of(context).animateTo(1);
+                  // Navigate to MainNavigation with Search tab selected
+                  Navigator.pushReplacement(
+                    context,
+                    ScaleFadeRoute(page: const MainNavigation(initialIndex: 1)),
+                  );
                 },
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(28),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: AppColors.white,
                     borderRadius: BorderRadius.circular(20),
@@ -76,18 +81,16 @@ class HomeScreen extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      Container(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(15),
-                          child: Image.asset(
-                            'assets/images/MapLogoHomepage.png',
-                            width: 240,
-                            height: 240,
-                            fit: BoxFit.contain,
-                          ),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(15),
+                        child: Image.asset(
+                          'assets/images/MapLogoHomepage.png',
+                          width: 200,
+                          height: 200,
+                          fit: BoxFit.contain,
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 14),
                       // Title
                       Text(
                         'Look for your location',
@@ -105,14 +108,14 @@ class HomeScreen extends StatelessWidget {
                           Icon(
                             Icons.touch_app,
                             size: 16,
-                            color: AppColors.darkBlue.withOpacity(0.7),
+                            color: AppColors.darkBlue.withValues(alpha: 0.7),
                           ),
                           const SizedBox(width: 6),
                           Text(
                             'Tap to search',
                             style: TextStyle(
                               fontSize: 13,
-                              color: AppColors.darkBlue.withOpacity(0.7),
+                              color: AppColors.darkBlue.withValues(alpha: 0.7),
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.3,
                             ),
@@ -123,12 +126,12 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
               // Travel History Section
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: AppColors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -169,7 +172,7 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
                     // History Items
                     const TravelHistoryItem(

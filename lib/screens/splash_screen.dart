@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
+import '../services/auth_service.dart';
+import '../utils/page_transitions.dart';
 import 'auth/login_screen.dart';
+import 'main_navigation.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -10,18 +13,48 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  final _authService = AuthService();
+
   @override
   void initState() {
     super.initState();
-    // Navigate to Login page after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
+    _checkAuthAndNavigate();
+  }
+
+  Future<void> _checkAuthAndNavigate() async {
+    // Wait for splash screen to display
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    // Check if user has a valid session
+    final isLoggedIn = await _authService.isLoggedIn();
+
+    if (!mounted) return;
+
+    if (isLoggedIn) {
+      // User is logged in - validate session with server
+      final user = await _authService.getCurrentUser();
+
+      if (!mounted) return;
+
+      if (user != null) {
+        // Valid session - go to home
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          FadeRoute(page: const MainNavigation()),
+        );
+      } else {
+        // Invalid token - go to login
+        Navigator.pushReplacement(
+          context,
+          FadeRoute(page: const LoginScreen()),
         );
       }
-    });
+    } else {
+      // Not logged in - go to login
+      Navigator.pushReplacement(context, FadeRoute(page: const LoginScreen()));
+    }
   }
 
   @override
@@ -39,6 +72,12 @@ class _SplashScreenState extends State<SplashScreen> {
                 width: 280,
                 height: 280,
                 fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 24),
+              // Loading indicator
+              const CircularProgressIndicator(
+                color: AppColors.white,
+                strokeWidth: 3,
               ),
             ],
           ),

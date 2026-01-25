@@ -7,27 +7,71 @@ import 'landmarks/landmarks_screen.dart';
 import 'profile/profile_screen.dart';
 
 class MainNavigation extends StatefulWidget {
-  const MainNavigation({super.key});
+  final int initialIndex;
+  final int? autoSelectRouteId;
+
+  const MainNavigation({
+    super.key,
+    this.initialIndex = 0,
+    this.autoSelectRouteId,
+  });
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
 }
 
 class _MainNavigationState extends State<MainNavigation> {
-  int _currentIndex = 0;
+  late int _currentIndex;
+  int? _autoSelectRouteId;
 
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const SearchScreen(),
-    const FareCalculatorScreen(),
-    const LandmarksScreen(),
-    const ProfileScreen(),
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _autoSelectRouteId = widget.autoSelectRouteId;
+  }
+
+  List<Widget> get _screens => [
+    const HomeScreen(key: ValueKey('home')),
+    SearchScreen(
+      key: const ValueKey('search'),
+      autoSelectRouteId: _autoSelectRouteId,
+      onAutoSelectionComplete: () {
+        // Clear the route ID after auto-selection to prevent it from happening again
+        if (mounted) {
+          setState(() {
+            _autoSelectRouteId = null;
+          });
+        }
+      },
+    ),
+    const FareCalculatorScreen(key: ValueKey('fare')),
+    const LandmarksScreen(key: ValueKey('landmarks')),
+    const ProfileScreen(key: ValueKey('profile')),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0.05, 0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(parent: animation, curve: Curves.easeInOut),
+                  ),
+              child: child,
+            ),
+          );
+        },
+        child: _screens[_currentIndex],
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: AppColors.white,

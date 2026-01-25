@@ -5,13 +5,23 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:math';
 import '../../constants/app_colors.dart';
 import '../../widgets/route_list_item.dart';
 import '../../services/api_service.dart';
 import '../../models/jeepney_route.dart';
+import '../../utils/route_display_helpers.dart';
+import '../../utils/transit_routing/transit_routing.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  final int? autoSelectRouteId;
+  final VoidCallback? onAutoSelectionComplete;
+
+  const SearchScreen({
+    super.key,
+    this.autoSelectRouteId,
+    this.onAutoSelectionComplete,
+  });
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -27,6 +37,7 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _isLoadingLocation = true;
   String _locationStatus = 'Getting your location...';
   String _currentAddress = 'Davao City, Philippines';
+  String _originalLocationAddress = 'Davao City, Philippines';
   bool _showRoutesList = false;
   bool _showSearchResults = false;
   List<Map<String, dynamic>> _searchResults = [];
@@ -42,12 +53,104 @@ class _SearchScreenState extends State<SearchScreen> {
   // Visible routes on map (route ID -> toggle state)
   final Set<int> _visibleRouteIds = {};
 
+  // Track if we've already handled auto-selection to prevent repeated triggers
+  bool _hasHandledAutoSelection = false;
+
+  // Hybrid routing state
+  final HybridTransitRouter _hybridRouter = HybridTransitRouter(
+    config: const HybridRoutingConfig(maxResults: 5, maxTransfers: 2),
+  );
+  bool _isCalculatingRoute = false;
+  List<SuggestedRoute> _calculatedRoutes = [];
+  HybridRoutingResult? _hybridResult;
+
+  // Sorted routes: visible routes first (alphabetically), then hidden routes (alphabetically)
+  List<JeepneyRoute> get _sortedRoutes {
+    final visibleRoutes = _routes
+        .where((r) => _visibleRouteIds.contains(r.id))
+        .toList();
+    final hiddenRoutes = _routes
+        .where((r) => !_visibleRouteIds.contains(r.id))
+        .toList();
+
+    // Sort each group alphabetically
+    visibleRoutes.sort((a, b) => a.name.compareTo(b.name));
+    hiddenRoutes.sort((a, b) => a.name.compareTo(b.name));
+
+    // Combine: visible first, then hidden
+    return [...visibleRoutes, ...hiddenRoutes];
+  }
+
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
     _fetchRoutes();
     _searchController.addListener(_onSearchChanged);
+
+    // Handle auto-selection after routes are loaded
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleAutoSelection();
+    });
+  }
+
+  void _handleAutoSelection() async {
+    // Only handle auto-selection once and only if route ID was provided
+    if (_hasHandledAutoSelection || widget.autoSelectRouteId == null) return;
+
+    final routeId = widget.autoSelectRouteId!;
+
+    // Mark as handled to prevent repeated triggers
+    _hasHandledAutoSelection = true;
+
+    // Wait for routes to load
+    while (_isLoadingRoutes) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    // Find and select the route
+    final route = _routes.firstWhere(
+      (r) => r.id == routeId,
+      orElse: () => _routes.first,
+    );
+
+    if (mounted) {
+      setState(() {
+        _visibleRouteIds.add(route.id);
+        _showRoutesList = true;
+      });
+
+      // Zoom to route if it has path
+      if (route.path.isNotEmpty) {
+        _zoomToRoute(route);
+      }
+
+      // Notify parent that auto-selection is complete so it can clear the ID
+      widget.onAutoSelectionComplete?.call();
+    }
+  }
+
+  void _zoomToRoute(JeepneyRoute route) {
+    if (route.path.isEmpty) return;
+
+    double minLat = route.path.first.latitude;
+    double maxLat = route.path.first.latitude;
+    double minLng = route.path.first.longitude;
+    double maxLng = route.path.first.longitude;
+
+    for (final point in route.path) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLng) minLng = point.longitude;
+      if (point.longitude > maxLng) maxLng = point.longitude;
+    }
+
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: LatLngBounds(LatLng(minLat, minLng), LatLng(maxLat, maxLng)),
+        padding: const EdgeInsets.all(60),
+      ),
+    );
   }
 
   Future<void> _fetchRoutes() async {
@@ -152,6 +255,455 @@ class _SearchScreenState extends State<SearchScreen> {
     _searchFocusNode.unfocus();
   }
 
+  void _showDirectionsModal() async {
+    if (_searchedLocation == null) return;
+
+    // Check if we have current location
+    if (_currentLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Getting your location...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // Show loading modal first
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      isScrollControlled: true,
+      builder: (context) => _buildRouteCalculationModal(),
+    );
+
+    // Calculate route
+    await _calculateRoute();
+  }
+
+  Future<void> _calculateRoute() async {
+    setState(() {
+      _isCalculatingRoute = true;
+    });
+
+    try {
+      // Use hybrid router to find routes
+      final result = await _hybridRouter.findRoutes(
+        origin: _currentLocation!,
+        destination: _searchedLocation!,
+        jeepneyRoutes: _routes,
+        osrmPath: null, // Let it calculate without OSRM for now
+      );
+
+      setState(() {
+        _calculatedRoutes = result.suggestedRoutes;
+        _hybridResult = result;
+        _isCalculatingRoute = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isCalculatingRoute = false;
+      });
+      if (mounted) {
+        Navigator.pop(context); // Close the modal
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error calculating route: $e')));
+      }
+    }
+  }
+
+  Widget _buildRouteCalculationModal() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle bar
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Suggested Routes',
+                      style: GoogleFonts.slackey(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.darkBlue,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (!_isCalculatingRoute)
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          setState(() {
+                            _searchedLocation = null;
+                            _searchedPlaceName = null;
+                            _searchController.clear();
+                            _currentAddress = _originalLocationAddress;
+                            _visibleRouteIds.clear();
+                          });
+                        },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // From - To
+                Row(
+                  children: [
+                    const Icon(Icons.my_location, color: Colors.blue, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _locationStatus,
+                        style: const TextStyle(fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, color: Colors.red, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _searchedPlaceName ?? 'Destination',
+                        style: const TextStyle(fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+              ],
+            ),
+          ),
+          // Content
+          Flexible(
+            child: _isCalculatingRoute
+                ? _buildLoadingState()
+                : _calculatedRoutes.isEmpty
+                ? _buildNoRoutesState()
+                : _buildRoutesListState(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text(
+              'Finding best routes...',
+              style: TextStyle(fontSize: 15, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoRoutesState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.directions_off, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No routes found',
+              style: GoogleFonts.slackey(
+                fontSize: 18,
+                color: AppColors.darkBlue,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Try selecting a different location',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoutesListState() {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      shrinkWrap: true,
+      itemCount: _calculatedRoutes.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final route = _calculatedRoutes[index];
+        return _buildRouteCard(route, index);
+      },
+    );
+  }
+
+  Widget _buildRouteCard(SuggestedRoute route, int index) {
+    final rankColors = [
+      Colors.amber[700]!, // Gold
+      Colors.grey[600]!, // Silver
+      Colors.brown[600]!, // Bronze
+    ];
+    final rankIcons = [Icons.looks_one, Icons.looks_two, Icons.looks_3];
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          // Close modal
+          Navigator.pop(context);
+
+          // Get all jeepney routes from this suggested route
+          final jeepneyRoutes = route.segments
+              .where((s) => s.route != null)
+              .map((s) => s.route!)
+              .toList();
+
+          if (jeepneyRoutes.isEmpty) return;
+
+          setState(() {
+            // Toggle visibility of these routes
+            final routeIds = jeepneyRoutes.map((r) => r.id).toSet();
+
+            // Check if all routes are already visible
+            final allVisible = routeIds.every(
+              (id) => _visibleRouteIds.contains(id),
+            );
+
+            if (allVisible) {
+              // Remove all these routes
+              _visibleRouteIds.removeAll(routeIds);
+            } else {
+              // Add all these routes
+              _visibleRouteIds.addAll(routeIds);
+            }
+          });
+
+          // Fit map to show all the routes
+          if (_visibleRouteIds.isNotEmpty) {
+            _fitMapToMultipleRoutes(jeepneyRoutes);
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Rank and route type
+              Row(
+                children: [
+                  if (index < 3)
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: rankColors[index].withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        rankIcons[index],
+                        size: 18,
+                        color: rankColors[index],
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: route.transferCount == 0
+                          ? Colors.green.withOpacity(0.1)
+                          : Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      route.transferCount == 0
+                          ? 'Direct'
+                          : '${route.transferCount} Transfer${route.transferCount > 1 ? 's' : ''}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: route.transferCount == 0
+                            ? Colors.green[700]
+                            : Colors.orange[700],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '\u20b1${route.totalFare.toStringAsFixed(2)}',
+                    style: GoogleFonts.slackey(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkBlue,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Route segments
+              ...route.segments.asMap().entries.map((entry) {
+                final segment = entry.value;
+                final isLast = entry.key == route.segments.length - 1;
+
+                if (segment.type == JourneySegmentType.walking) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.directions_walk,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Walk ${(segment.distanceKm * 1000).toStringAsFixed(0)}m',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                } else if (segment.type == JourneySegmentType.jeepneyRide) {
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppColors.darkBlue,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.directions_bus,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Ride: ${segment.route?.routeNumber ?? 'Jeepney'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.darkBlue,
+                                ),
+                              ),
+                              if (segment.route?.name != null)
+                                Text(
+                                  segment.route!.name,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey[600],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '\u20b1${segment.fare.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.darkBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              }).toList(),
+              const Divider(height: 20),
+              // Summary
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildSummaryItem(
+                    Icons.access_time,
+                    '~${route.estimatedTimeMinutes.toStringAsFixed(0)} min',
+                  ),
+                  _buildSummaryItem(
+                    Icons.directions_walk,
+                    '${(route.totalWalkingDistanceKm * 1000).toStringAsFixed(0)}m walk',
+                  ),
+                  _buildSummaryItem(
+                    Icons.straighten,
+                    '${route.totalDistanceKm.toStringAsFixed(1)} km',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: Colors.grey[600]),
+        const SizedBox(width: 4),
+        Text(text, style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+      ],
+    );
+  }
+
   Future<void> _getCurrentLocation() async {
     try {
       // Check if location services are enabled
@@ -219,6 +771,7 @@ class _SearchScreenState extends State<SearchScreen> {
               : 'Davao City (Default)';
           _isLoadingLocation = false;
           _currentAddress = address;
+          _originalLocationAddress = address;
         });
 
         // Move map to current location
@@ -246,6 +799,7 @@ class _SearchScreenState extends State<SearchScreen> {
           // Always use Davao City as default
           _currentLocation = LatLng(7.0731, 125.6128);
           _currentAddress = 'Davao City, Philippines';
+          _originalLocationAddress = 'Davao City, Philippines';
         });
 
         // Move to Davao City
@@ -282,14 +836,86 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Color? _parseColor(String? colorString) {
-    if (colorString == null || colorString.isEmpty) return null;
-    try {
-      final hexColor = colorString.replaceAll('#', '');
-      return Color(int.parse('FF$hexColor', radix: 16));
-    } catch (e) {
-      return null;
+  void _fitMapToMultipleRoutes(List<JeepneyRoute> routes) {
+    if (routes.isEmpty) return;
+
+    // Collect all points from all routes
+    final allPoints = <LatLng>[];
+    for (var route in routes) {
+      allPoints.addAll(route.path);
     }
+
+    if (allPoints.isEmpty) return;
+
+    double minLat = allPoints[0].latitude;
+    double maxLat = allPoints[0].latitude;
+    double minLng = allPoints[0].longitude;
+    double maxLng = allPoints[0].longitude;
+
+    for (var point in allPoints) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLng) minLng = point.longitude;
+      if (point.longitude > maxLng) maxLng = point.longitude;
+    }
+
+    final bounds = LatLngBounds(LatLng(minLat, minLng), LatLng(maxLat, maxLng));
+
+    _mapController.fitCamera(
+      CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60)),
+    );
+  }
+
+  Color? _parseColor(String? colorString) {
+    return parseHexColor(colorString);
+  }
+
+  List<Marker> _buildDirectionArrows(JeepneyRoute route) {
+    List<Marker> arrows = [];
+
+    if (route.path.length < 2) return arrows;
+
+    // Calculate arrow positions every 500 meters
+    List<ArrowPoint> arrowPoints = calculateArrowPoints(route.path, 500.0);
+
+    Color routeColor = parseHexColor(route.color) ?? Colors.blue;
+    Color arrowColor = getContrastColor(routeColor);
+
+    for (var arrowPoint in arrowPoints) {
+      arrows.add(
+        Marker(
+          point: arrowPoint.position,
+          width: 28,
+          height: 28,
+          child: Transform.rotate(
+            angle: arrowPoint.bearing * pi / 180,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.9),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 2,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.arrow_forward,
+                color: arrowColor,
+                size: 18,
+                shadows: [
+                  Shadow(color: Colors.white.withOpacity(0.8), blurRadius: 2),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return arrows;
   }
 
   List<Marker> _buildRouteMarkers(JeepneyRoute route) {
@@ -297,50 +923,108 @@ class _SearchScreenState extends State<SearchScreen> {
 
     if (route.path.isEmpty) return markers;
 
-    // Start Point Marker (Green with Play Icon)
+    // Start Point Marker (Green with Play Icon + Pulsing Animation)
     markers.add(
       Marker(
         point: route.path.first,
-        width: 40,
-        height: 40,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.green,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
+        width: 50,
+        height: 70,
+        child: Column(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.green.withOpacity(0.4),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: const Icon(Icons.play_arrow, color: Colors.white, size: 20),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.green,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'START',
+                style: GoogleFonts.slackey(
+                  fontSize: 8,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
 
-    // End Point Marker (Red with Stop Icon)
+    // End Point Marker (Red with Stop Icon + Pulsing Animation)
     markers.add(
       Marker(
         point: route.path.last,
-        width: 40,
-        height: 40,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.red,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
+        width: 50,
+        height: 70,
+        child: Column(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.4),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: const Icon(Icons.stop, color: Colors.white, size: 20),
+              child: const Icon(Icons.stop, color: Colors.white, size: 24),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'END',
+                style: GoogleFonts.slackey(
+                  fontSize: 8,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -463,14 +1147,28 @@ class _SearchScreenState extends State<SearchScreen> {
                               route.path.isNotEmpty,
                         )
                         .map((route) {
+                          Color routeColor =
+                              parseHexColor(route.color) ?? Colors.blue;
                           return Polyline(
                             points: route.path,
-                            color: _parseColor(route.color) ?? Colors.blue,
-                            strokeWidth: 4.0,
+                            color: routeColor,
+                            strokeWidth: 7.0,
                             borderStrokeWidth: 2.0,
-                            borderColor: Colors.white,
+                            borderColor: Colors.black.withOpacity(0.3),
                           );
                         })
+                        .toList(),
+                  ),
+                // Direction Arrows
+                if (_visibleRouteIds.isNotEmpty)
+                  MarkerLayer(
+                    markers: _routes
+                        .where(
+                          (route) =>
+                              _visibleRouteIds.contains(route.id) &&
+                              route.path.isNotEmpty,
+                        )
+                        .expand((route) => _buildDirectionArrows(route))
                         .toList(),
                   ),
                 // Route Start/End Markers
@@ -646,6 +1344,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             _locationStatus,
                             style: GoogleFonts.slackey(
                               fontSize: 14,
+                              fontWeight: FontWeight.w600,
                               color: AppColors.darkBlue,
                             ),
                           ),
@@ -660,6 +1359,18 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
 
+          // Get Directions Button (appears when location is searched)
+          if (_searchedLocation != null)
+            Positioned(
+              right: 16,
+              bottom: _showRoutesList ? 350 : 170,
+              child: FloatingActionButton(
+                onPressed: _showDirectionsModal,
+                backgroundColor: AppColors.darkBlue,
+                child: const Icon(Icons.directions, color: AppColors.white),
+              ),
+            ),
+
           // Re-center to Location Button (Floating)
           if (_currentLocation != null)
             Positioned(
@@ -668,7 +1379,7 @@ class _SearchScreenState extends State<SearchScreen> {
               child: FloatingActionButton(
                 onPressed: _recenterToUserLocation,
                 backgroundColor: AppColors.white,
-                child: const Icon(Icons.my_location, color: Colors.blue),
+                child: const Icon(Icons.my_location, color: AppColors.darkBlue),
               ),
             ),
 
@@ -743,6 +1454,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                 'List of Routes',
                                 style: GoogleFonts.slackey(
                                   fontSize: 18,
+                                  fontWeight: FontWeight.w600,
                                   color: AppColors.textPrimary,
                                 ),
                               ),
@@ -802,9 +1514,9 @@ class _SearchScreenState extends State<SearchScreen> {
                             Flexible(
                               child: ListView.builder(
                                 shrinkWrap: true,
-                                itemCount: _routes.length,
+                                itemCount: _sortedRoutes.length,
                                 itemBuilder: (context, index) {
-                                  final route = _routes[index];
+                                  final route = _sortedRoutes[index];
                                   final isVisible = _visibleRouteIds.contains(
                                     route.id,
                                   );

@@ -44,3 +44,15 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 /android/app/build
+
+# Android build reports
+/android/build/
+
+# Environment and config files (if you add sensitive data)
+# lib/config/api_config.dart
+
+# macOS generated files
+/macos/Flutter/GeneratedPluginRegistrant.swift
+
+# Dev tools
+devtools_options.yaml

@@ -1,169 +1,275 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
+import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
+import '../../utils/page_transitions.dart';
 import '../auth/login_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final _authService = AuthService();
+  UserModel? _user;
+  bool _isLoading = true;
+  bool _isLoggingOut = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // First try cached user
+      final cachedUser = await _authService.getCachedUser();
+      if (cachedUser != null && mounted) {
+        setState(() => _user = cachedUser);
+      }
+
+      // Then verify with server
+      final user = await _authService.getCurrentUser();
+      if (mounted) {
+        setState(() {
+          _user = user;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _logout() async {
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoggingOut = true);
+
+    try {
+      await _authService.logout();
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          FadeRoute(page: const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoggingOut = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Logout failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isLoggedIn = _user != null;
+
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const SizedBox(height: 20),
-              // Title
-              Text(
-                'Profile',
-                style: GoogleFonts.slackey(
-                  fontSize: 28,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Profile Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
+        child: _isLoggingOut
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.white),
+              )
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    // Avatar
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.3),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.person,
-                        size: 60,
-                        color: AppColors.darkBlue,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Name
+                    const SizedBox(height: 12),
+                    // Title
                     Text(
-                      'Guest User',
+                      'Profile',
                       style: GoogleFonts.slackey(
-                        fontSize: 20,
+                        fontSize: 28,
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Not logged in',
-                      style: TextStyle(fontSize: 14, color: AppColors.gray),
-                    ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
-                    // Login Button
-                    SizedBox(
+                    // Profile Card
+                    Container(
                       width: double.infinity,
-                      height: 45,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const LoginScreen(),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          // Avatar
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              shape: BoxShape.circle,
                             ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.darkBlue,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
+                            child: _isLoading
+                                ? const CircularProgressIndicator(
+                                    color: AppColors.darkBlue,
+                                  )
+                                : const Icon(
+                                    Icons.person,
+                                    size: 50,
+                                    color: AppColors.darkBlue,
+                                  ),
                           ),
-                        ),
-                        child: const Text(
-                          'Login / Sign Up',
-                          style: TextStyle(
-                            color: AppColors.white,
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(height: 16),
+                          // Name
+                          Text(
+                            isLoggedIn ? _user!.name : 'Guest User',
+                            style: GoogleFonts.slackey(
+                              fontSize: 20,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 4),
+                          Text(
+                            isLoggedIn ? _user!.email : 'Not logged in',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.gray,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Login/Logout Button
+                          if (!isLoggedIn)
+                            SizedBox(
+                              width: double.infinity,
+                              height: 45,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  Navigator.pushReplacement(
+                                    context,
+                                    FadeRoute(page: const LoginScreen()),
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.darkBlue,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(25),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Login / Sign Up',
+                                  style: TextStyle(
+                                    color: AppColors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
+                    const SizedBox(height: 16),
 
-              // Settings Options
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+                    // Settings Options
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          _buildSettingItem(
+                            icon: Icons.history,
+                            title: 'Travel History',
+                            onTap: () {},
+                          ),
+                          _buildDivider(),
+                          _buildSettingItem(
+                            icon: Icons.notifications_outlined,
+                            title: 'Notifications',
+                            onTap: () {},
+                          ),
+                          _buildDivider(),
+                          _buildSettingItem(
+                            icon: Icons.settings_outlined,
+                            title: 'Settings',
+                            onTap: () {},
+                          ),
+                          _buildDivider(),
+                          _buildSettingItem(
+                            icon: Icons.feedback_outlined,
+                            title: 'Report & Feedback',
+                            onTap: () {},
+                          ),
+                          _buildDivider(),
+                          _buildSettingItem(
+                            icon: Icons.info_outline,
+                            title: 'About',
+                            onTap: () {},
+                          ),
+                          if (isLoggedIn) ...[
+                            _buildDivider(),
+                            _buildSettingItem(
+                              icon: Icons.logout,
+                              title: 'Log Out',
+                              onTap: _logout,
+                              isDestructive: true,
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    _buildSettingItem(
-                      icon: Icons.history,
-                      title: 'Travel History',
-                      onTap: () {},
-                    ),
-                    _buildDivider(),
-                    _buildSettingItem(
-                      icon: Icons.notifications_outlined,
-                      title: 'Notifications',
-                      onTap: () {},
-                    ),
-                    _buildDivider(),
-                    _buildSettingItem(
-                      icon: Icons.settings_outlined,
-                      title: 'Settings',
-                      onTap: () {},
-                    ),
-                    _buildDivider(),
-                    _buildSettingItem(
-                      icon: Icons.help_outline,
-                      title: 'Help & Support',
-                      onTap: () {},
-                    ),
-                    _buildDivider(),
-                    _buildSettingItem(
-                      icon: Icons.info_outline,
-                      title: 'About',
-                      onTap: () {},
-                    ),
-                    _buildDivider(),
-                    _buildSettingItem(
-                      icon: Icons.logout,
-                      title: 'Log Out',
-                      onTap: () {},
-                    ),
+                    const SizedBox(height: 100),
                   ],
                 ),
               ),
-              const SizedBox(height: 100),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -172,12 +278,19 @@ class ProfileScreen extends StatelessWidget {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
+    bool isDestructive = false,
   }) {
     return ListTile(
-      leading: Icon(icon, color: AppColors.darkBlue),
+      leading: Icon(
+        icon,
+        color: isDestructive ? AppColors.error : AppColors.darkBlue,
+      ),
       title: Text(
         title,
-        style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+        style: TextStyle(
+          fontSize: 14,
+          color: isDestructive ? AppColors.error : AppColors.textPrimary,
+        ),
       ),
       trailing: const Icon(
         Icons.arrow_forward_ios,
@@ -189,7 +302,7 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildDivider() {
-    return Divider(
+    return const Divider(
       height: 1,
       indent: 16,
       endIndent: 16,

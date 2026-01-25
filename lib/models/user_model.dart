@@ -1,31 +1,48 @@
-// Example User Model
-// Put all your data models here (User, Product, Order, etc.)
+// User Model for authentication
+// Matches the Laravel API response structure
 
 class UserModel {
-  final String id;
+  final int id;
   final String name;
   final String email;
+  final String? phone;
   final String role; // 'admin' or 'user'
 
   UserModel({
     required this.id,
     required this.name,
     required this.email,
+    this.phone,
     required this.role,
   });
 
-  // Convert from database map to UserModel
-  factory UserModel.fromMap(Map<String, dynamic> map) {
+  // Create from JSON (API response)
+  factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: map['id'] ?? '',
-      name: map['name'] ?? '',
-      email: map['email'] ?? '',
-      role: map['role'] ?? 'user',
+      id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
+      name: json['name'] ?? '',
+      email: json['email'] ?? '',
+      phone: json['phone'],
+      role: json['role'] ?? 'user',
     );
   }
 
-  // Convert UserModel to database map
-  Map<String, dynamic> toMap() {
-    return {'id': id, 'name': name, 'email': email, 'role': role};
+  // Convert to JSON for storage
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'role': role,
+    };
+  }
+
+  // Check if user is admin
+  bool get isAdmin => role == 'admin';
+
+  @override
+  String toString() {
+    return 'UserModel(id: $id, name: $name, email: $email, role: $role)';
   }
 }
