@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../constants/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
+import '../../utils/security_utils.dart';
 import '../main_navigation.dart';
 import 'sign_in_screen.dart';
 
@@ -48,7 +49,20 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on AuthException catch (e) {
       if (mounted) {
-        _showError(e.message);
+        // SECURITY: Show rate limit warning if applicable
+        if (e.isRateLimited) {
+          _showError(e.message);
+        } else {
+          // Show remaining attempts if close to lockout
+          final remaining = _authService.getRemainingAttempts();
+          if (remaining <= 2 && remaining > 0) {
+            _showError(
+              '${e.message}\n$remaining attempts remaining before lockout.',
+            );
+          } else {
+            _showError(e.message);
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -143,8 +157,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your email';
                             }
-                            if (!value.contains('@')) {
-                              return 'Please enter a valid email';
+                            // SECURITY: Use SecurityUtils for email validation
+                            final emailError = SecurityUtils.validateEmail(
+                              value,
+                            );
+                            if (emailError != null) {
+                              return emailError;
                             }
                             return null;
                           },

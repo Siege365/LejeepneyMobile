@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:http/http.dart' as http;
 import '../models/landmark.dart';
 import '../models/jeepney_route.dart';
@@ -17,9 +17,10 @@ class ApiService {
   static const String _apiPath = '/api/v1';
 
   // ngrok URL (when using ngrok for physical device testing)
+  // SECURITY: Uses HTTPS for encrypted connections
   // Get this from running: ngrok http 8000
   static const String _ngrokUrl =
-      'https://heterochromous-lilli-luetically.ngrok-free.dev/api/v1'; // Fixed - added /api/v1
+      'https://heterochromous-lilli-luetically.ngrok-free.dev/api/v1';
 
   // URLs for different environments
   static const String _baseUrlEmulator =
@@ -31,16 +32,17 @@ class ApiService {
 
   static String get baseUrl {
     if (kIsWeb) {
-      return _baseUrlWeb;
+      // SECURITY: Use HTTPS in production
+      return kDebugMode ? _baseUrlWeb : 'https://localhost:$_port$_apiPath';
     }
     if (Platform.isAndroid) {
-      // For physical device with firewall issues, use ngrok:
+      // For physical device with firewall issues, use ngrok (already HTTPS):
       return _ngrokUrl;
 
       // For local network (no firewall):
-      return _baseUrlDevice; // Use _baseUrlEmulator for Android Emulator
+      // return _baseUrlDevice; // Use _baseUrlEmulator for Android Emulator
     }
-    return _baseUrlWeb;
+    return kDebugMode ? _baseUrlWeb : 'https://localhost:$_port$_apiPath';
   }
 
   // Singleton pattern

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../constants/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
+import '../../utils/security_utils.dart';
 import '../main_navigation.dart';
 import 'login_screen.dart';
 
@@ -156,6 +157,11 @@ class _SignInScreenState extends State<SignInScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your name';
                             }
+                            // SECURITY: Validate name format using SecurityUtils
+                            final nameError = SecurityUtils.validateName(value);
+                            if (nameError != null) {
+                              return nameError;
+                            }
                             return null;
                           },
                         ),
@@ -184,8 +190,12 @@ class _SignInScreenState extends State<SignInScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your email';
                             }
-                            if (!value.contains('@')) {
-                              return 'Please enter a valid email';
+                            // SECURITY: Use SecurityUtils for email validation
+                            final emailError = SecurityUtils.validateEmail(
+                              value,
+                            );
+                            if (emailError != null) {
+                              return emailError;
                             }
                             return null;
                           },
@@ -228,10 +238,8 @@ class _SignInScreenState extends State<SignInScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter a password';
                             }
-                            if (value.length < 8) {
-                              return 'Password must be at least 8 characters';
-                            }
-                            return null;
+                            // SECURITY: Use SecurityUtils for password validation
+                            return SecurityUtils.validatePasswordSimple(value);
                           },
                         ),
                         const SizedBox(height: 16),
