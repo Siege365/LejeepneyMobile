@@ -9,6 +9,7 @@ import 'profile/profile_screen.dart';
 class MainNavigation extends StatefulWidget {
   final int initialIndex;
   final int? autoSelectRouteId;
+  final List<int>? autoSelectRouteIds; // New: for multiple routes
   final double? landmarkLatitude;
   final double? landmarkLongitude;
   final String? landmarkName;
@@ -17,6 +18,7 @@ class MainNavigation extends StatefulWidget {
     super.key,
     this.initialIndex = 0,
     this.autoSelectRouteId,
+    this.autoSelectRouteIds,
     this.landmarkLatitude,
     this.landmarkLongitude,
     this.landmarkName,
@@ -29,6 +31,7 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   late int _currentIndex;
   int? _autoSelectRouteId;
+  List<int>? _autoSelectRouteIds;
   double? _landmarkLatitude;
   double? _landmarkLongitude;
   String? _landmarkName;
@@ -39,12 +42,15 @@ class _MainNavigationState extends State<MainNavigation> {
     super.initState();
     _currentIndex = widget.initialIndex;
     _autoSelectRouteId = widget.autoSelectRouteId;
+    _autoSelectRouteIds = widget.autoSelectRouteIds;
     _landmarkLatitude = widget.landmarkLatitude;
     _landmarkLongitude = widget.landmarkLongitude;
     _landmarkName = widget.landmarkName;
 
-    // Increment key only if landmark data is provided
-    if (_landmarkLatitude != null || _autoSelectRouteId != null) {
+    // Increment key only if landmark data or route selection is provided
+    if (_landmarkLatitude != null ||
+        _autoSelectRouteId != null ||
+        _autoSelectRouteIds != null) {
       _searchScreenKey++;
     }
   }
@@ -54,6 +60,7 @@ class _MainNavigationState extends State<MainNavigation> {
     SearchScreen(
       key: ValueKey('search_$_searchScreenKey'),
       autoSelectRouteId: _autoSelectRouteId,
+      autoSelectRouteIds: _autoSelectRouteIds,
       landmarkLatitude: _landmarkLatitude,
       landmarkLongitude: _landmarkLongitude,
       landmarkName: _landmarkName,
@@ -63,6 +70,7 @@ class _MainNavigationState extends State<MainNavigation> {
         if (mounted) {
           setState(() {
             _autoSelectRouteId = null;
+            _autoSelectRouteIds = null;
             _landmarkLatitude = null;
             _landmarkLongitude = null;
             _landmarkName = null;

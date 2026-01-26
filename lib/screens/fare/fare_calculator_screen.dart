@@ -986,13 +986,16 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
         borderRadius: BorderRadius.circular(12),
         onTap: routes.isNotEmpty
             ? () {
-                // Navigate to search screen with first route selected
+                // Extract all route IDs from the suggested route
+                final routeIds = routes.map((r) => r.id).toList();
+
+                // Navigate to search screen with ALL routes selected
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
                     builder: (context) => MainNavigation(
                       initialIndex: 1, // Search tab
-                      autoSelectRouteId: routes.first.id,
+                      autoSelectRouteIds: routeIds, // Pass all route IDs
                     ),
                   ),
                 );

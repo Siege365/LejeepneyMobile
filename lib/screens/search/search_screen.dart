@@ -15,6 +15,7 @@ import '../../utils/transit_routing/transit_routing.dart';
 
 class SearchScreen extends StatefulWidget {
   final int? autoSelectRouteId;
+  final List<int>? autoSelectRouteIds; // New: for multiple routes
   final double? landmarkLatitude;
   final double? landmarkLongitude;
   final String? landmarkName;
@@ -23,6 +24,7 @@ class SearchScreen extends StatefulWidget {
   const SearchScreen({
     super.key,
     this.autoSelectRouteId,
+    this.autoSelectRouteIds,
     this.landmarkLatitude,
     this.landmarkLongitude,
     this.landmarkName,
@@ -64,7 +66,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   // Hybrid routing state
   final HybridTransitRouter _hybridRouter = HybridTransitRouter(
-    config: const HybridRoutingConfig(maxResults: 5, maxTransfers: 2),
+    config: const HybridRoutingConfig(maxResults: 5, maxTransfers: 3),
   );
   bool _isCalculatingRoute = false;
   List<SuggestedRoute> _calculatedRoutes = [];
@@ -151,10 +153,15 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _handleAutoSelection() async {
-    // Only handle auto-selection once and only if route ID was provided
-    if (_hasHandledAutoSelection || widget.autoSelectRouteId == null) return;
+    // Only handle auto-selection once
+    if (_hasHandledAutoSelection) return;
 
-    final routeId = widget.autoSelectRouteId!;
+    // Check if we have route IDs to select (single or multiple)
+    if (widget.autoSelectRouteId == null &&
+        (widget.autoSelectRouteIds == null ||
+            widget.autoSelectRouteIds!.isEmpty)) {
+      return;
+    }
 
     // Mark as handled to prevent repeated triggers
     _hasHandledAutoSelection = true;
@@ -164,24 +171,40 @@ class _SearchScreenState extends State<SearchScreen> {
       await Future.delayed(const Duration(milliseconds: 100));
     }
 
-    // Find and select the route
-    final route = _routes.firstWhere(
-      (r) => r.id == routeId,
-      orElse: () => _routes.first,
-    );
-
     if (mounted) {
       setState(() {
-        _visibleRouteIds.add(route.id);
-        _showRoutesList = true;
+        // Handle multiple route IDs (from suggested route cards)
+        if (widget.autoSelectRouteIds != null &&
+            widget.autoSelectRouteIds!.isNotEmpty) {
+          // Add all route IDs to visible routes
+          _visibleRouteIds.addAll(widget.autoSelectRouteIds!);
+          _showRoutesList = true;
+
+          // Find all matching routes and zoom to show them all
+          final selectedRoutes = _routes
+              .where((r) => widget.autoSelectRouteIds!.contains(r.id))
+              .toList();
+          if (selectedRoutes.isNotEmpty) {
+            _fitMapToMultipleRoutes(selectedRoutes);
+          }
+        }
+        // Handle single route ID (legacy support)
+        else if (widget.autoSelectRouteId != null) {
+          final route = _routes.firstWhere(
+            (r) => r.id == widget.autoSelectRouteId,
+            orElse: () => _routes.first,
+          );
+          _visibleRouteIds.add(route.id);
+          _showRoutesList = true;
+
+          // Zoom to route if it has path
+          if (route.path.isNotEmpty) {
+            _zoomToRoute(route);
+          }
+        }
       });
 
-      // Zoom to route if it has path
-      if (route.path.isNotEmpty) {
-        _zoomToRoute(route);
-      }
-
-      // Notify parent that auto-selection is complete so it can clear the ID
+      // Notify parent that auto-selection is complete so it can clear the IDs
       widget.onAutoSelectionComplete?.call();
     }
   }
