@@ -15,6 +15,7 @@ class HybridTransitRouter {
   // Cached pathfinder (rebuilt when routes change)
   JeepneyPathfinder? _pathfinder;
   List<JeepneyRoute>? _cachedRoutes;
+  // ignore: unused_field - Reserved for landmark-based routing
   List<Map<String, dynamic>>? _cachedLandmarks;
 
   HybridTransitRouter({this.config = HybridRoutingConfig.defaultConfig})
@@ -147,7 +148,7 @@ class HybridTransitRouter {
       if (entry.value < 40) continue; // Skip low coverage routes
 
       final route = jeepneyRoutes.firstWhere(
-        (r) => r.id == entry.key,
+        (r) => r.id.toString() == entry.key,
         orElse: () => jeepneyRoutes.first,
       );
 

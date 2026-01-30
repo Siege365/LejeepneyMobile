@@ -20,6 +20,7 @@
 ///   print('${route.routeNames}: ₱${route.totalFare}');
 /// }
 /// ```
+library;
 
 // Models
 export 'models.dart';

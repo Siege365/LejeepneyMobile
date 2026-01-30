@@ -47,6 +47,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
 
   // User location state
   LatLng? _userLocation;
+  // ignore: unused_field - Reserved for permission-based UI logic
   bool _hasLocationPermission = false;
 
   // Route matching state
@@ -235,7 +236,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
                               borderRadius: BorderRadius.circular(8),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
+                                  color: Colors.black.withValues(alpha: 0.2),
                                   blurRadius: 4,
                                   offset: const Offset(0, 2),
                                 ),
@@ -280,7 +281,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
                               borderRadius: BorderRadius.circular(8),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
+                                  color: Colors.black.withValues(alpha: 0.2),
                                   blurRadius: 4,
                                   offset: const Offset(0, 2),
                                 ),
@@ -314,7 +315,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
                       height: 30,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.3),
+                          color: Colors.blue.withValues(alpha: 0.3),
                           shape: BoxShape.circle,
                         ),
                         child: Center(
@@ -327,7 +328,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
                               border: Border.all(color: Colors.white, width: 2),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.blue.withOpacity(0.4),
+                                  color: Colors.blue.withValues(alpha: 0.4),
                                   blurRadius: 4,
                                   spreadRadius: 2,
                                 ),
@@ -396,7 +397,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
                 borderRadius: BorderRadius.circular(15),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),

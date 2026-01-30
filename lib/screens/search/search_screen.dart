@@ -5,7 +5,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:math';
 import '../../constants/app_colors.dart';
 import '../../widgets/route_list_item.dart';
 import '../../services/api_service.dart';
@@ -70,6 +69,7 @@ class _SearchScreenState extends State<SearchScreen> {
   );
   bool _isCalculatingRoute = false;
   List<SuggestedRoute> _calculatedRoutes = [];
+  // ignore: unused_field - Reserved for future hybrid routing display
   HybridRoutingResult? _hybridResult;
 
   // Sorted routes: visible routes first (alphabetically), then hidden routes (alphabetically)
@@ -679,7 +679,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: rankColors[index].withOpacity(0.1),
+                        color: rankColors[index].withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Icon(
@@ -696,8 +696,8 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                     decoration: BoxDecoration(
                       color: route.transferCount == 0
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.orange.withOpacity(0.1),
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.orange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -808,7 +808,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   );
                 }
                 return const SizedBox.shrink();
-              }).toList(),
+              }),
               const Divider(height: 20),
               // Summary
               Row(
@@ -1008,6 +1008,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  // ignore: unused_element - Kept for potential direct color parsing
   Color? _parseColor(String? colorString) {
     return parseHexColor(colorString);
   }
@@ -1034,10 +1035,10 @@ class _SearchScreenState extends State<SearchScreen> {
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 2,
                     offset: const Offset(0, 1),
                   ),
@@ -1048,7 +1049,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 color: arrowColor,
                 size: 18,
                 shadows: [
-                  Shadow(color: Colors.white.withOpacity(0.8), blurRadius: 2),
+                  Shadow(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    blurRadius: 2,
+                  ),
                 ],
               ),
             ),
@@ -1082,12 +1086,12 @@ class _SearchScreenState extends State<SearchScreen> {
                 border: Border.all(color: Colors.white, width: 3),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.green.withOpacity(0.4),
+                    color: Colors.green.withValues(alpha: 0.4),
                     blurRadius: 8,
                     spreadRadius: 2,
                   ),
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -1137,12 +1141,12 @@ class _SearchScreenState extends State<SearchScreen> {
                 border: Border.all(color: Colors.white, width: 3),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.red.withOpacity(0.4),
+                    color: Colors.red.withValues(alpha: 0.4),
                     blurRadius: 8,
                     spreadRadius: 2,
                   ),
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -1217,7 +1221,7 @@ class _SearchScreenState extends State<SearchScreen> {
                               width: 50,
                               height: 50,
                               decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(0.2),
+                                color: Colors.blue.withValues(alpha: 0.2),
                                 shape: BoxShape.circle,
                               ),
                             ),
@@ -1297,7 +1301,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             color: routeColor,
                             strokeWidth: 7.0,
                             borderStrokeWidth: 2.0,
-                            borderColor: Colors.black.withOpacity(0.3),
+                            borderColor: Colors.black.withValues(alpha: 0.3),
                           );
                         })
                         .toList(),
@@ -1346,7 +1350,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             borderRadius: BorderRadius.circular(30),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -1409,7 +1413,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -1461,7 +1465,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withValues(alpha: 0.1),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -1581,7 +1585,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withValues(alpha: 0.1),
                             blurRadius: 10,
                             offset: const Offset(0, -4),
                           ),

@@ -21,7 +21,7 @@ class TravelHistoryItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.lightGray.withOpacity(0.3),
+          color: AppColors.lightGray.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(15),
         ),
         child: Row(
@@ -46,7 +46,7 @@ class TravelHistoryItem extends StatelessWidget {
             Container(
               width: 2,
               height: 30,
-              color: AppColors.gray.withOpacity(0.3),
+              color: AppColors.gray.withValues(alpha: 0.3),
             ),
             const SizedBox(width: 12),
             // Route

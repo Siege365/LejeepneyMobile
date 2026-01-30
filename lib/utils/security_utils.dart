@@ -1,5 +1,5 @@
 // Security Utilities - input sanitization, validation, and security helpers
-library security_utils;
+library;
 
 import 'package:flutter/foundation.dart';
 

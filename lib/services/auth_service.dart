@@ -45,6 +45,7 @@ class AuthService {
   // Must match your Laravel API setup
 
   // Local IP for device testing (run 'ipconfig' to find)
+  // ignore: unused_field - Reserved for local network testing
   static const String _localIp = '172.19.25.44';
   static const String _port = '8000';
 

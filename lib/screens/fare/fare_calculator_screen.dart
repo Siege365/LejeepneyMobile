@@ -63,7 +63,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
-                    color: AppColors.white.withOpacity(0.9),
+                    color: AppColors.white.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Column(
@@ -71,7 +71,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                       Icon(
                         Icons.map,
                         size: 64,
-                        color: AppColors.darkBlue.withOpacity(0.5),
+                        color: AppColors.darkBlue.withValues(alpha: 0.5),
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -180,10 +180,10 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.15),
+                  color: AppColors.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(15),
                   border: Border.all(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: AppColors.primary.withValues(alpha: 0.3),
                     width: 1.5,
                   ),
                 ),
@@ -222,7 +222,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -312,7 +312,9 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                                 color: AppColors.white,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: AppColors.lightGray.withOpacity(0.5),
+                                  color: AppColors.lightGray.withValues(
+                                    alpha: 0.5,
+                                  ),
                                   width: 1,
                                 ),
                               ),
@@ -346,7 +348,9 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.15),
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.15,
+                                ),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Column(
@@ -374,7 +378,9 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                                     'Student/Senior/PWD',
                                     style: TextStyle(
                                       fontSize: 9,
-                                      color: AppColors.primary.withOpacity(0.8),
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.8,
+                                      ),
                                       fontStyle: FontStyle.italic,
                                     ),
                                   ),
@@ -392,7 +398,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.lightGray.withOpacity(0.3),
+                            color: AppColors.lightGray.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -431,7 +437,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -466,8 +472,8 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                               ),
                               decoration: BoxDecoration(
                                 color: _hybridResult!.fallbackUsed
-                                    ? Colors.orange.withOpacity(0.2)
-                                    : Colors.green.withOpacity(0.2),
+                                    ? Colors.orange.withValues(alpha: 0.2)
+                                    : Colors.green.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(
@@ -564,7 +570,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.lightGray.withOpacity(0.3),
+                          color: AppColors.lightGray.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -596,7 +602,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: AppColors.white.withOpacity(0.9),
+                  color: AppColors.white.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: Column(
@@ -676,7 +682,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: rankColors[rank - 1].withOpacity(0.1),
+                        color: rankColors[rank - 1].withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Icon(
@@ -692,7 +698,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
+                      color: Colors.green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -797,6 +803,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
   }
 
   /// Get color for match percentage badge
+  // ignore: unused_element - Reserved for match percentage UI
   Color _getMatchColor(double percentage) {
     if (percentage >= 80) return Colors.green;
     if (percentage >= 60) return Colors.orange;
@@ -844,7 +851,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: rankColors[rank - 1].withOpacity(0.1),
+                        color: rankColors[rank - 1].withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Icon(
@@ -860,7 +867,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
+                      color: Colors.orange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -1013,7 +1020,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: rankColors[rank - 1].withOpacity(0.1),
+                        color: rankColors[rank - 1].withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Icon(
@@ -1030,8 +1037,8 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                     ),
                     decoration: BoxDecoration(
                       color: suggestedRoute.transferCount == 0
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.orange.withOpacity(0.1),
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.orange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -1142,7 +1149,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                   );
                 }
                 return const SizedBox.shrink();
-              }).toList(),
+              }),
               const Divider(height: 20),
               // Summary
               Row(
@@ -1185,10 +1192,10 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.lightGray.withOpacity(0.2),
+        color: AppColors.lightGray.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppColors.lightGray.withOpacity(0.5),
+          color: AppColors.lightGray.withValues(alpha: 0.5),
           width: 1,
         ),
       ),
@@ -1199,8 +1206,8 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
             height: 32,
             decoration: BoxDecoration(
               color: rank == 1
-                  ? AppColors.darkBlue.withOpacity(0.8)
-                  : AppColors.gray.withOpacity(0.6),
+                  ? AppColors.darkBlue.withValues(alpha: 0.8)
+                  : AppColors.gray.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Center(
@@ -1231,7 +1238,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                 Text(
                   description,
                   style: TextStyle(
-                    color: AppColors.gray.withOpacity(0.8),
+                    color: AppColors.gray.withValues(alpha: 0.8),
                     fontSize: 12,
                   ),
                 ),
@@ -1240,7 +1247,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
           ),
           Icon(
             Icons.chevron_right,
-            color: AppColors.gray.withOpacity(0.5),
+            color: AppColors.gray.withValues(alpha: 0.5),
             size: 20,
           ),
         ],

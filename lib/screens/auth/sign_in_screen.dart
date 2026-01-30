@@ -105,7 +105,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -298,7 +298,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.darkBlue,
                               disabledBackgroundColor: AppColors.darkBlue
-                                  .withOpacity(0.6),
+                                  .withValues(alpha: 0.6),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(25),
                               ),

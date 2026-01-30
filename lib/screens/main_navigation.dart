@@ -110,7 +110,7 @@ class _MainNavigationState extends State<MainNavigation> {
           color: AppColors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -183,7 +183,7 @@ class _MainNavigationState extends State<MainNavigation> {
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.darkBlue.withOpacity(0.3),
+                color: AppColors.darkBlue.withValues(alpha: 0.3),
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),

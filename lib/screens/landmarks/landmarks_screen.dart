@@ -22,6 +22,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
   // API data
   List<Landmark> _apiLandmarks = [];
   bool _isLoading = true;
+  // ignore: unused_field - Reserved for API/local toggle display
   bool _isUsingApi = false;
   String? _errorMessage;
   Position? _userPosition;
@@ -216,7 +217,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -276,7 +277,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                     : 'Results for "$_searchQuery"',
                 style: TextStyle(
                   fontSize: 13,
-                  color: AppColors.textPrimary.withOpacity(0.8),
+                  color: AppColors.textPrimary.withValues(alpha: 0.8),
                 ),
               ),
             ),
@@ -313,13 +314,15 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                           border: Border.all(
                             color: isSelected
                                 ? AppColors.darkBlue
-                                : AppColors.gray.withOpacity(0.3),
+                                : AppColors.gray.withValues(alpha: 0.3),
                             width: 1.5,
                           ),
                           boxShadow: isSelected
                               ? [
                                   BoxShadow(
-                                    color: AppColors.darkBlue.withOpacity(0.3),
+                                    color: AppColors.darkBlue.withValues(
+                                      alpha: 0.3,
+                                    ),
                                     blurRadius: 8,
                                     offset: const Offset(0, 3),
                                   ),
@@ -353,7 +356,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.warning.withOpacity(0.1),
+                    color: AppColors.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -401,7 +404,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                           Icon(
                             Icons.search_off,
                             size: 60,
-                            color: AppColors.gray.withOpacity(0.5),
+                            color: AppColors.gray.withValues(alpha: 0.5),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -449,7 +452,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -499,8 +502,12 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                       colors: [
-                                        AppColors.primary.withOpacity(0.6),
-                                        AppColors.darkBlue.withOpacity(0.4),
+                                        AppColors.primary.withValues(
+                                          alpha: 0.6,
+                                        ),
+                                        AppColors.darkBlue.withValues(
+                                          alpha: 0.4,
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -519,8 +526,8 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                                 colors: [
-                                  AppColors.primary.withOpacity(0.6),
-                                  AppColors.darkBlue.withOpacity(0.4),
+                                  AppColors.primary.withValues(alpha: 0.6),
+                                  AppColors.darkBlue.withValues(alpha: 0.4),
                                 ],
                               ),
                             ),
@@ -808,7 +815,7 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: AppColors.gray.withOpacity(0.3),
+              color: AppColors.gray.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -834,7 +841,7 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
+                                  color: Colors.black.withValues(alpha: 0.1),
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
                                 ),
@@ -848,7 +855,9 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
                                 loadingBuilder: (context, child, progress) {
                                   if (progress == null) return child;
                                   return Container(
-                                    color: AppColors.lightGray.withOpacity(0.3),
+                                    color: AppColors.lightGray.withValues(
+                                      alpha: 0.3,
+                                    ),
                                     child: Center(
                                       child: CircularProgressIndicator(
                                         color: AppColors.darkBlue,
@@ -863,7 +872,9 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
                                 },
                                 errorBuilder: (context, error, stackTrace) =>
                                     Container(
-                                      color: AppColors.primary.withOpacity(0.3),
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.3,
+                                      ),
                                       child: Icon(
                                         widget.getCategoryIcon(
                                           landmark.category,
@@ -898,7 +909,7 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
                                 decoration: BoxDecoration(
                                   color: _currentPage == index
                                       ? AppColors.darkBlue
-                                      : AppColors.gray.withOpacity(0.4),
+                                      : AppColors.gray.withValues(alpha: 0.4),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
@@ -910,7 +921,7 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
                 : Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.3),
+                      color: AppColors.primary.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Center(
@@ -993,7 +1004,7 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.gray.withOpacity(0.1),
+                            color: AppColors.gray.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(

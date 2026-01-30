@@ -156,13 +156,13 @@ class TransitGraph {
 
   /// Find nearby landmark for a point
   String? _findNearbyLandmark(LatLng point) {
-    if (_landmarks == null || _landmarks!.isEmpty) return null;
+    if (_landmarks == null || _landmarks.isEmpty) return null;
 
     const maxDistance = 200.0; // meters
     String? nearestName;
     double nearestDistance = double.infinity;
 
-    for (final landmark in _landmarks!) {
+    for (final landmark in _landmarks) {
       final lat = landmark['latitude'] as double?;
       final lng = landmark['longitude'] as double?;
       final name = landmark['name'] as String?;
@@ -187,7 +187,7 @@ class TransitGraph {
 
       // Find all nodes on this route
       final routeNodes = _nodes.values
-          .where((n) => n.connectedRouteIds.contains(route.id))
+          .where((n) => n.connectedRouteIds.contains(route.id.toString()))
           .toList();
 
       // Sort nodes by their position along the route
@@ -242,8 +242,8 @@ class TransitGraph {
         final intersectionNode = _nodes.values.firstWhere(
           (n) =>
               n.type == TransitNodeType.intersection &&
-              n.connectedRouteIds.contains(intersection.route1.id) &&
-              n.connectedRouteIds.contains(intersection.route2.id),
+              n.connectedRouteIds.contains(intersection.route1.id.toString()) &&
+              n.connectedRouteIds.contains(intersection.route2.id.toString()),
           orElse: () => TransitNode(
             id: 'temp',
             location: intersection.point,

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'constants/app_colors.dart';
-import 'screens/splash_screen.dart';
+import 'constants/app_routes.dart';
+import 'constants/app_strings.dart';
+import 'constants/app_theme.dart';
+import 'providers/app_providers.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -12,18 +14,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Lejeepney',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          primary: AppColors.primary,
-        ),
-        textTheme: GoogleFonts.slackeyTextTheme(),
-        useMaterial3: true,
+    return AppProviderScope(
+      child: MaterialApp(
+        title: AppStrings.appName,
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        navigatorKey: NavigationService.navigatorKey,
+        onGenerateRoute: AppRouter.onGenerateRoute,
+        initialRoute: AppRoutes.splash,
       ),
-      home: const SplashScreen(),
     );
   }
 }

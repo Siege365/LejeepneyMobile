@@ -23,7 +23,7 @@ class RouteListItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: AppColors.lightGray.withOpacity(0.3),
+          color: AppColors.lightGray.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(15),
         ),
         child: Row(
@@ -42,7 +42,7 @@ class RouteListItem extends StatelessWidget {
             Container(
               width: 2,
               height: 24,
-              color: AppColors.gray.withOpacity(0.3),
+              color: AppColors.gray.withValues(alpha: 0.3),
             ),
             const SizedBox(width: 16),
             // Show Route Toggle Button

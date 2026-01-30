@@ -19,9 +19,9 @@ double calculateDistance(LatLng from, LatLng to) {
 /// Get contrast color (black or white) based on background color luminance
 Color getContrastColor(Color backgroundColor) {
   double luminance =
-      (0.299 * backgroundColor.red +
-          0.587 * backgroundColor.green +
-          0.114 * backgroundColor.blue) /
+      (0.299 * (backgroundColor.r * 255).round() +
+          0.587 * (backgroundColor.g * 255).round() +
+          0.114 * (backgroundColor.b * 255).round()) /
       255;
   return luminance > 0.5 ? Colors.black : Colors.white;
 }

@@ -74,7 +74,7 @@ class MultiTransferRoute {
 
   @override
   String toString() =>
-      'MultiTransferRoute($routeNames, ${transferCount} transfers, ₱${totalFare.toStringAsFixed(2)})';
+      'MultiTransferRoute($routeNames, $transferCount transfers, ₱${totalFare.toStringAsFixed(2)})';
 }
 
 /// Utility class for finding multi-transfer route combinations
@@ -304,7 +304,6 @@ class MultiTransferMatcher {
     if (userPath.length < 4) return results;
 
     // Split path into thirds
-    final splitPoints = [0.33, 0.66];
     final firstThird = (userPath.length * 0.33).floor();
     final secondThird = (userPath.length * 0.66).floor();
 
@@ -344,8 +343,9 @@ class MultiTransferMatcher {
         for (final third in matches3) {
           // Skip duplicate routes in sequence
           if (first.route.id == second.route.id ||
-              second.route.id == third.route.id)
+              second.route.id == third.route.id) {
             continue;
+          }
 
           final transfer1 = segment1.last;
           final transfer2 = segment2.last;

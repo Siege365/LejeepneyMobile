@@ -30,7 +30,7 @@ class HomeScreen extends StatelessWidget {
                       'Welcome to',
                       style: GoogleFonts.slackey(
                         fontSize: 16,
-                        color: AppColors.textPrimary.withOpacity(0.8),
+                        color: AppColors.textPrimary.withValues(alpha: 0.8),
                       ),
                     ),
                     Text(
@@ -46,7 +46,7 @@ class HomeScreen extends StatelessWidget {
                       'Your jeepney companion in Davao City',
                       style: TextStyle(
                         fontSize: 13,
-                        color: AppColors.textPrimary.withOpacity(0.7),
+                        color: AppColors.textPrimary.withValues(alpha: 0.7),
                       ),
                     ),
                   ],
@@ -72,7 +72,7 @@ class HomeScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.darkBlue.withValues(alpha: 0.15),
+                        color: AppColors.darkBlue.withValues(alpha: 0.1),
                         blurRadius: 15,
                         offset: const Offset(0, 6),
                         spreadRadius: 2,
@@ -137,7 +137,7 @@ class HomeScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.darkBlue.withOpacity(0.1),
+                      color: AppColors.darkBlue.withValues(alpha: 0.1),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                       spreadRadius: 1,
@@ -153,7 +153,7 @@ class HomeScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.2),
+                            color: AppColors.primary.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(

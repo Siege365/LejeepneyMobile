@@ -23,10 +23,12 @@ class ApiService {
       'https://heterochromous-lilli-luetically.ngrok-free.dev/api/v1';
 
   // URLs for different environments
+  // ignore: unused_field - Reserved for emulator testing
   static const String _baseUrlEmulator =
       'http://10.0.2.2:$_port$_apiPath'; // Android Emulator
   static const String _baseUrlWeb =
       'http://localhost:$_port$_apiPath'; // Chrome/Web
+  // ignore: unused_field - Reserved for physical device testing
   static const String _baseUrlDevice =
       'http://$_localIp:$_port$_apiPath'; // Physical device (local network)
 
