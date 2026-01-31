@@ -1,26 +1,78 @@
+import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/jeepney_route.dart';
 import 'geo_utils.dart';
 import 'models.dart';
 import 'transit_graph.dart';
 
+// Parameters for isolate graph building
+class _GraphBuildParams {
+  final List<JeepneyRoute> routes;
+  final List<Map<String, dynamic>>? landmarks;
+  final HybridRoutingConfig config;
+
+  _GraphBuildParams(this.routes, this.landmarks, this.config);
+}
+
 /// Finds transit routes using only jeepney route data (no OSRM dependency)
 /// This is the fallback pathfinder when OSRM paths have poor jeepney coverage
 class JeepneyPathfinder {
   final HybridRoutingConfig config;
-  final TransitGraph _graph;
+  late final TransitGraph _graph;
+  bool _isInitialized = false;
 
   JeepneyPathfinder({
     required List<JeepneyRoute> routes,
     List<Map<String, dynamic>>? landmarks,
     this.config = HybridRoutingConfig.defaultConfig,
-  }) : _graph = TransitGraph(
-         routes: routes,
-         landmarks: landmarks,
-         config: config,
-       ) {
+  }) {
+    _graph = TransitGraph(routes: routes, landmarks: landmarks, config: config);
+    // Build graph synchronously in constructor for backwards compatibility
     _graph.build();
+    _isInitialized = true;
   }
+
+  /// Check if the pathfinder is ready
+  bool get isReady => _isInitialized;
+
+  /// Build graph in background isolate (truly non-blocking)
+  static TransitGraph _buildGraphInIsolate(_GraphBuildParams params) {
+    final graph = TransitGraph(
+      routes: params.routes,
+      landmarks: params.landmarks,
+      config: params.config,
+    );
+    graph.build(); // Runs in isolate - doesn't block main thread
+    return graph;
+  }
+
+  /// Build the graph asynchronously in a background isolate (truly non-blocking)
+  static Future<JeepneyPathfinder> createAsync({
+    required List<JeepneyRoute> routes,
+    List<Map<String, dynamic>>? landmarks,
+    HybridRoutingConfig config = HybridRoutingConfig.defaultConfig,
+  }) async {
+    debugPrint(
+      '[Pathfinder] Creating async pathfinder with ${routes.length} routes...',
+    );
+    final stopwatch = Stopwatch()..start();
+
+    final pathfinder = JeepneyPathfinder._internal(config: config);
+
+    // Build graph in background isolate - TRULY non-blocking
+    final params = _GraphBuildParams(routes, landmarks, config);
+    pathfinder._graph = await compute(_buildGraphInIsolate, params);
+    pathfinder._isInitialized = true;
+
+    stopwatch.stop();
+    debugPrint(
+      '[Pathfinder] Async initialization complete in ${stopwatch.elapsedMilliseconds}ms (background isolate)',
+    );
+
+    return pathfinder;
+  }
+
+  JeepneyPathfinder._internal({required this.config});
 
   /// Find suggested routes from origin to destination
   /// Returns up to maxResults route combinations
@@ -30,11 +82,15 @@ class JeepneyPathfinder {
     List<Map<String, dynamic>>? landmarks,
   }) {
     final results = <SuggestedRoute>[];
+    final stopwatch = Stopwatch()..start();
 
     // Find routes accessible from origin
     final originRoutes = _graph.findRoutesNearPoint(
       origin,
       maxDistance: config.maxAccessWalkingMeters,
+    );
+    debugPrint(
+      '[Pathfinder] Found ${originRoutes.length} routes near origin (max ${config.maxAccessWalkingMeters}m)',
     );
 
     // Find routes accessible from destination
@@ -42,8 +98,21 @@ class JeepneyPathfinder {
       destination,
       maxDistance: config.maxAccessWalkingMeters,
     );
+    debugPrint(
+      '[Pathfinder] Found ${destRoutes.length} routes near destination',
+    );
 
     if (originRoutes.isEmpty || destRoutes.isEmpty) {
+      if (originRoutes.isEmpty) {
+        debugPrint(
+          '[Pathfinder] FAILED: No jeepney routes within ${config.maxAccessWalkingMeters}m of origin',
+        );
+      }
+      if (destRoutes.isEmpty) {
+        debugPrint(
+          '[Pathfinder] FAILED: No jeepney routes within ${config.maxAccessWalkingMeters}m of destination',
+        );
+      }
       return results;
     }
 
@@ -56,9 +125,18 @@ class JeepneyPathfinder {
       landmarks: landmarks,
     );
     results.addAll(directRoutes);
+    debugPrint(
+      '[Pathfinder] Strategy 1 (Direct): Found ${directRoutes.length} routes',
+    );
+
+    // Score and deduplicate after each strategy to check actual unique count
+    var scoredResults = _scoreAndRank(results);
+    debugPrint(
+      '[Pathfinder] After deduplication: ${scoredResults.length} unique routes',
+    );
 
     // Strategy 2: One transfer routes
-    if (results.length < config.maxResults) {
+    if (scoredResults.length < config.maxResults) {
       final oneTransferRoutes = _findOneTransferRoutes(
         origin: origin,
         destination: destination,
@@ -67,10 +145,17 @@ class JeepneyPathfinder {
         landmarks: landmarks,
       );
       results.addAll(oneTransferRoutes);
+      debugPrint(
+        '[Pathfinder] Strategy 2 (1-Transfer): Found ${oneTransferRoutes.length} routes',
+      );
+      scoredResults = _scoreAndRank(results);
+      debugPrint(
+        '[Pathfinder] After deduplication: ${scoredResults.length} unique routes',
+      );
     }
 
     // Strategy 3: Two transfer routes (only if needed)
-    if (results.length < config.maxResults && config.maxTransfers >= 2) {
+    if (scoredResults.length < config.maxResults && config.maxTransfers >= 2) {
       final twoTransferRoutes = _findTwoTransferRoutes(
         origin: origin,
         destination: destination,
@@ -79,10 +164,21 @@ class JeepneyPathfinder {
         landmarks: landmarks,
       );
       results.addAll(twoTransferRoutes);
+      debugPrint(
+        '[Pathfinder] Strategy 3 (2-Transfer): Found ${twoTransferRoutes.length} routes',
+      );
+      scoredResults = _scoreAndRank(results);
+      debugPrint(
+        '[Pathfinder] After deduplication: ${scoredResults.length} unique routes',
+      );
     }
 
-    // Score and sort results
-    final scoredResults = _scoreAndRank(results);
+    // Final scoring already done above
+
+    stopwatch.stop();
+    debugPrint(
+      '[Pathfinder] Total: ${scoredResults.length} routes found in ${stopwatch.elapsedMilliseconds}ms',
+    );
 
     return scoredResults.take(config.maxResults).toList();
   }
@@ -96,11 +192,18 @@ class JeepneyPathfinder {
     List<Map<String, dynamic>>? landmarks,
   }) {
     final results = <SuggestedRoute>[];
+    final processedRouteIds = <int>{}; // Track which routes we've already added
 
     // Find routes that appear in both lists
     for (final originAccess in originRoutes) {
       for (final destAccess in destRoutes) {
         if (originAccess.route.id == destAccess.route.id) {
+          // Skip if we already processed this route (take first/best access point)
+          if (processedRouteIds.contains(originAccess.route.id)) {
+            continue;
+          }
+          processedRouteIds.add(originAccess.route.id);
+
           final route = originAccess.route;
 
           // Calculate journey segments
@@ -758,12 +861,15 @@ class JeepneyPathfinder {
     // Sort by score (lowest first)
     scored.sort((a, b) => a.score.compareTo(b.score));
 
-    // Remove duplicates (same route combination)
+    // Remove duplicates (same route combination with similar metrics)
     final seen = <String>{};
     final unique = <SuggestedRoute>[];
 
     for (final route in scored) {
-      final key = route.routeNames;
+      // More permissive key to allow variations
+      // Include fare and walking distance to allow different route variants
+      final key =
+          '${route.routeNames}_${route.transferCount}_${route.totalFare.toStringAsFixed(0)}_${(route.totalWalkingDistanceKm * 1000).toStringAsFixed(0)}';
       if (!seen.contains(key)) {
         seen.add(key);
         unique.add(route);

@@ -17,6 +17,8 @@ class HybridTransitRouter {
   List<JeepneyRoute>? _cachedRoutes;
   // ignore: unused_field - Reserved for landmark-based routing
   List<Map<String, dynamic>>? _cachedLandmarks;
+  DateTime? _lastGraphBuild;
+  static const _graphCacheValidDuration = Duration(hours: 1);
 
   HybridTransitRouter({this.config = HybridRoutingConfig.defaultConfig})
     : _validator = RouteAccuracyValidator(config: config);
@@ -30,6 +32,14 @@ class HybridTransitRouter {
     List<LatLng>? osrmPath,
     List<Map<String, dynamic>>? landmarks,
   }) async {
+    final stopwatch = Stopwatch()..start();
+    debugPrint(
+      '[HybridRouter] Finding routes from ${origin.latitude.toStringAsFixed(4)},${origin.longitude.toStringAsFixed(4)} to ${destination.latitude.toStringAsFixed(4)},${destination.longitude.toStringAsFixed(4)}',
+    );
+    debugPrint(
+      '[HybridRouter] Available jeepney routes: ${jeepneyRoutes.length}, OSRM path points: ${osrmPath?.length ?? 0}',
+    );
+
     // Update pathfinder cache if routes changed
     _updatePathfinderCache(jeepneyRoutes, landmarks);
 
@@ -54,7 +64,14 @@ class HybridTransitRouter {
           jeepneyRoutes: jeepneyRoutes,
           landmarks: landmarks,
         );
+        debugPrint(
+          '[HybridRouter] OSRM-based routes found: ${osrmBasedRoutes.length}',
+        );
       }
+    } else {
+      debugPrint(
+        '[HybridRouter] No OSRM path provided, using jeepney-based routing only',
+      );
     }
 
     // Find jeepney-based routes (always as alternative or primary)
@@ -64,6 +81,13 @@ class HybridTransitRouter {
         origin: origin,
         destination: destination,
         landmarks: landmarks,
+      );
+      debugPrint(
+        '[HybridRouter] Jeepney-based routes found: ${jeepneyBasedRoutes.length}',
+      );
+    } else {
+      debugPrint(
+        '[HybridRouter] WARNING: Pathfinder is null, cannot find jeepney-based routes',
       );
     }
 
@@ -91,10 +115,17 @@ class HybridTransitRouter {
       // No routes found
       primarySource = RouteSourceType.jeepneyBased;
       combinedRoutes = [];
+      debugPrint('[HybridRouter] WARNING: No routes found from any source!');
     }
 
+    stopwatch.stop();
+    final finalRoutes = combinedRoutes.take(config.maxResults).toList();
+    debugPrint(
+      '[HybridRouter] Final result: ${finalRoutes.length} routes, source: ${primarySource.name}, took ${stopwatch.elapsedMilliseconds}ms',
+    );
+
     return HybridRoutingResult(
-      suggestedRoutes: combinedRoutes.take(config.maxResults).toList(),
+      suggestedRoutes: finalRoutes,
       primarySource: primarySource,
       osrmValidation: validationResult,
       fallbackUsed: validationResult != null && !validationResult.isAccurate,
@@ -104,6 +135,8 @@ class HybridTransitRouter {
   }
 
   /// Update pathfinder cache if routes changed
+  /// NOTE: This should NOT be called during route calculations - use preInitialize() instead!
+  /// This method is only kept for edge cases where async initialization wasn't done.
   void _updatePathfinderCache(
     List<JeepneyRoute> routes,
     List<Map<String, dynamic>>? landmarks,
@@ -113,8 +146,13 @@ class HybridTransitRouter {
         _cachedRoutes!.length != routes.length ||
         (routes.isNotEmpty && _cachedRoutes!.first.id != routes.first.id);
 
-    if (routesChanged) {
-      debugPrint('Building transit graph with ${routes.length} routes...');
+    if (routesChanged && _pathfinder == null) {
+      debugPrint(
+        '[HybridRouter] WARNING: Pathfinder not pre-initialized! Building synchronously (slow)...',
+      );
+      debugPrint(
+        '[HybridRouter] TIP: Call preInitialize() when routes are loaded to avoid main thread blocking',
+      );
       _pathfinder = JeepneyPathfinder(
         routes: routes,
         landmarks: landmarks,
@@ -122,8 +160,62 @@ class HybridTransitRouter {
       );
       _cachedRoutes = routes;
       _cachedLandmarks = landmarks;
+    } else if (routesChanged && _pathfinder != null) {
+      debugPrint(
+        '[HybridRouter] Routes changed but pathfinder exists - using existing cache',
+      );
     }
   }
+
+  /// Pre-initialize the pathfinder asynchronously (call when routes are first loaded)
+  /// This allows the graph to be built in the background before user requests directions
+  Future<void> preInitialize({
+    required List<JeepneyRoute> routes,
+    List<Map<String, dynamic>>? landmarks,
+  }) async {
+    final routesChanged =
+        _cachedRoutes == null ||
+        _cachedRoutes!.length != routes.length ||
+        (routes.isNotEmpty && _cachedRoutes!.first.id != routes.first.id);
+
+    // Check if cached graph is still valid
+    if (_pathfinder != null &&
+        _lastGraphBuild != null &&
+        !routesChanged &&
+        DateTime.now().difference(_lastGraphBuild!) <
+            _graphCacheValidDuration) {
+      final cacheAge = DateTime.now().difference(_lastGraphBuild!);
+      debugPrint(
+        '[HybridRouter] Using cached graph (age: ${cacheAge.inMinutes}min, valid for ${_graphCacheValidDuration.inMinutes}min)',
+      );
+      return;
+    }
+
+    if (routesChanged || _pathfinder == null) {
+      debugPrint(
+        '[HybridRouter] Pre-initializing pathfinder with ${routes.length} routes...',
+      );
+      final buildStopwatch = Stopwatch()..start();
+
+      _pathfinder = await JeepneyPathfinder.createAsync(
+        routes: routes,
+        landmarks: landmarks,
+        config: config,
+      );
+
+      _cachedRoutes = routes;
+      _cachedLandmarks = landmarks;
+      _lastGraphBuild = DateTime.now();
+
+      buildStopwatch.stop();
+      debugPrint(
+        '[HybridRouter] Pre-initialization complete in ${buildStopwatch.elapsedMilliseconds}ms, cached at ${_lastGraphBuild}',
+      );
+    }
+  }
+
+  /// Check if pathfinder is ready
+  bool get isReady => _pathfinder?.isReady ?? false;
 
   /// Match OSRM path to jeepney routes (creates SuggestedRoute objects)
   List<SuggestedRoute> _matchOsrmToJeepney({
@@ -260,12 +352,15 @@ class HybridTransitRouter {
 
   /// Merge and rank routes from different sources
   List<SuggestedRoute> _mergeAndRank(List<SuggestedRoute> routes) {
-    // Remove exact duplicates (same route names)
+    // Remove exact duplicates - but allow variations in fare/distance/walking
     final seen = <String>{};
     final unique = <SuggestedRoute>[];
 
     for (final route in routes) {
-      final key = '${route.routeNames}_${route.transferCount}';
+      // More permissive key: include fare and walking distance for variation
+      // This allows multiple routes with same name but different segments/costs
+      final key =
+          '${route.routeNames}_${route.transferCount}_${route.totalFare.toStringAsFixed(0)}_${(route.totalWalkingDistanceKm * 1000).toStringAsFixed(0)}';
       if (!seen.contains(key)) {
         seen.add(key);
         unique.add(route);
@@ -274,6 +369,10 @@ class HybridTransitRouter {
 
     // Sort by score
     unique.sort((a, b) => a.score.compareTo(b.score));
+
+    debugPrint(
+      '[HybridRouter] Merged ${routes.length} routes -> ${unique.length} unique routes',
+    );
 
     return unique;
   }

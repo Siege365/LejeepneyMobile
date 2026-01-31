@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:http/http.dart' as http;
 import '../models/landmark.dart';
 import '../models/jeepney_route.dart';
@@ -54,7 +55,8 @@ class ApiService {
 
   // HTTP client with timeout
   final http.Client _client = http.Client();
-  static const Duration _timeout = Duration(seconds: 15);
+  static const Duration _timeout = Duration(seconds: 90); // Increased for large route data
+  static const int _maxRetries = 3;
 
   // ========== LANDMARKS API ==========
 
@@ -206,27 +208,79 @@ class ApiService {
 
   // ========== ROUTES API ==========
 
-  /// Fetch all jeepney routes
+  /// Fetch all jeepney routes with retry logic
   Future<List<JeepneyRoute>> fetchAllRoutes() async {
-    try {
-      final response = await _client
-          .get(Uri.parse('$baseUrl/routes'))
-          .timeout(_timeout);
+    int retryCount = 0;
+    Exception? lastError;
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true && data['data'] != null) {
-          return (data['data'] as List)
-              .map((json) => JeepneyRoute.fromJson(json))
-              .toList();
+    while (retryCount < _maxRetries) {
+      try {
+        debugPrint('[API] Fetching routes (attempt ${retryCount + 1}/$_maxRetries)...');
+        
+        final response = await _client
+            .get(
+              Uri.parse('$baseUrl/routes'),
+              headers: {
+                'Accept': 'application/json',
+                'Connection': 'keep-alive',
+              },
+            )
+            .timeout(_timeout);
+
+        if (response.statusCode == 200) {
+          debugPrint('[API] Routes response received (${response.body.length} bytes)');
+          
+          // Parse in try-catch to handle partial JSON
+          try {
+            final data = json.decode(response.body);
+            if (data['success'] == true && data['data'] != null) {
+              final routes = (data['data'] as List)
+                  .map((json) => JeepneyRoute.fromJson(json))
+                  .toList();
+              debugPrint('[API] Successfully parsed ${routes.length} routes');
+              return routes;
+            }
+          } on FormatException catch (e) {
+            debugPrint('[API] JSON parsing failed: ${e.message}');
+            throw ApiException('Incomplete data received from server. Please try again.');
+          }
         }
-      }
 
-      throw ApiException('Failed to fetch routes');
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      throw ApiException('Network error: $e');
+        throw ApiException('Failed to fetch routes (status: ${response.statusCode})');
+      } on SocketException catch (e) {
+        lastError = e;
+        debugPrint('[API] Network error (attempt ${retryCount + 1}): $e');
+        retryCount++;
+        if (retryCount < _maxRetries) {
+          await Future.delayed(Duration(seconds: 2 * retryCount)); // Exponential backoff
+          continue;
+        }
+      } on http.ClientException catch (e) {
+        lastError = e;
+        debugPrint('[API] Connection error (attempt ${retryCount + 1}): $e');
+        retryCount++;
+        if (retryCount < _maxRetries) {
+          await Future.delayed(Duration(seconds: 2 * retryCount));
+          continue;
+        }
+      } on TimeoutException catch (e) {
+        lastError = e;
+        debugPrint('[API] Timeout (attempt ${retryCount + 1}): $e');
+        retryCount++;
+        if (retryCount < _maxRetries) {
+          await Future.delayed(Duration(seconds: 2 * retryCount));
+          continue;
+        }
+      } catch (e) {
+        if (e is ApiException) rethrow;
+        debugPrint('[API] Unexpected error: $e');
+        throw ApiException('Network error: $e');
+      }
     }
+
+    throw ApiException(
+      'Failed to fetch routes after $_maxRetries attempts. ${lastError != null ? 'Last error: $lastError' : 'Please check your internet connection.'}',
+    );
   }
 
   /// Fetch a single route by ID

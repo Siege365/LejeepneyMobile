@@ -36,8 +36,8 @@ class RouteAccuracyValidator {
       );
     }
 
-    // Sample path for efficiency
-    final sampledPath = GeoUtils.samplePath(osrmPath, maxPoints: 100);
+    // Sample path for efficiency (reduced for performance)
+    final sampledPath = GeoUtils.samplePath(osrmPath, maxPoints: 40);
 
     // Check coverage for each point
     final coverageResults = _analyzeCoverage(sampledPath, jeepneyRoutes);
@@ -198,7 +198,7 @@ class RouteAccuracyValidator {
     required List<JeepneyRoute> routes,
   }) {
     final routeCoverage = <String, double>{};
-    final sampledPath = GeoUtils.samplePath(path, maxPoints: 50);
+    final sampledPath = GeoUtils.samplePath(path, maxPoints: 25);
 
     for (final route in routes) {
       if (route.path.isEmpty) continue;

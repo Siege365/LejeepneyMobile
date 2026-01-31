@@ -197,11 +197,13 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
             // Title
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Landmarks',
-                style: GoogleFonts.slackey(
-                  fontSize: 28,
-                  color: AppColors.textPrimary,
+              child: Center(
+                child: Text(
+                  'Landmarks',
+                  style: GoogleFonts.slackey(
+                    fontSize: 28,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
             ),

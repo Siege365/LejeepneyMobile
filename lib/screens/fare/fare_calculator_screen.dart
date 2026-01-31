@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:latlong2/latlong.dart';
 import '../../constants/app_colors.dart';
 import '../../models/jeepney_route.dart';
+import '../../services/api_service.dart';
+import '../../services/route_calculation_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../utils/multi_transfer_matcher.dart';
 import '../../utils/transit_routing/transit_routing.dart';
@@ -18,9 +21,11 @@ class FareCalculatorScreen extends StatefulWidget {
 class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
   // Static variables to persist data during app session (but not after restart)
   static double _calculatedFare = 0;
-  static double? _mapDistance;
   static String? _mapFromArea;
   static String? _mapToArea;
+  static LatLng? _pointA; // Store actual coordinates
+  static LatLng? _pointB; // Store actual coordinates
+  static List<LatLng> _routePath = []; // Store route path
 
   // Route matching from map
   static List<JeepneyRoute> _suggestedRoutes = [];
@@ -29,8 +34,58 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
   static List<MultiTransferRoute> _multiTransferRoutes = [];
   static List<SuggestedRoute> _hybridSuggestedRoutes =
       []; // New: hybrid routing results
-  static HybridRoutingResult? _hybridResult; // New: full hybrid result
   bool _isLoadingRoutes = false;
+
+  // Service following dependency injection pattern
+  final RouteCalculationService _routeCalculationService =
+      RouteCalculationService(apiService: ApiService());
+
+  /// Recalculate routes after swapping points
+  /// Delegates to service layer - UI only handles state updates
+  Future<void> _recalculateRoutes() async {
+    if (_pointA == null || _pointB == null) {
+      setState(() {
+        _isLoadingRoutes = false;
+      });
+      return;
+    }
+
+    try {
+      final result = await _routeCalculationService.calculateRoutes(
+        origin: _pointA!,
+        destination: _pointB!,
+        osrmPath: _routePath.isNotEmpty ? _routePath : null,
+      );
+
+      if (!result.success) {
+        throw Exception(result.errorMessage ?? 'Unknown error');
+      }
+
+      if (mounted) {
+        setState(() {
+          _calculatedFare = result.calculatedFare;
+          _suggestedRoutes = result.suggestedRoutes;
+          _routeMatchPercentages = result.routeMatchPercentages;
+          _multiTransferRoutes = result.legacyMultiTransfer;
+          _hybridSuggestedRoutes = result.hybridSuggestedRoutes;
+          _isLoadingRoutes = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error recalculating routes: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingRoutes = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to calculate route: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +96,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
               // Title
               Text(
                 'Fare Calculator',
@@ -50,12 +105,12 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                   color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               const Text(
                 'Calculate your jeepney fare',
                 style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 4),
 
               // Default state when not used
               if (_calculatedFare == 0)
@@ -107,7 +162,16 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                         _mapFromArea = data['from'];
                         _mapToArea = data['to'];
                         _calculatedFare = data['fare'];
-                        _mapDistance = data['distance'];
+
+                        // Store coordinates and route path for swap functionality
+                        _pointA = data['pointA'] as LatLng?;
+                        _pointB = data['pointB'] as LatLng?;
+                        if (data['routePath'] != null) {
+                          _routePath = (data['routePath'] as List)
+                              .cast<LatLng>();
+                        } else {
+                          _routePath = [];
+                        }
 
                         // Use matched routes from map instead of API call
                         if (data['matchedRoutes'] != null) {
@@ -144,13 +208,6 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                           _hybridSuggestedRoutes = [];
                         }
 
-                        if (data['hybridResult'] != null) {
-                          _hybridResult =
-                              data['hybridResult'] as HybridRoutingResult;
-                        } else {
-                          _hybridResult = null;
-                        }
-
                         _isLoadingRoutes = false;
                       });
                     }
@@ -173,7 +230,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 8),
 
               // Disclaimer Card (Always visible)
               Container(
@@ -204,13 +261,14 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                           color: AppColors.textPrimary,
                           height: 1.4,
                         ),
+                        textAlign: TextAlign.justify,
                       ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 4),
 
               // Result Card
               if (_calculatedFare > 0)
@@ -260,13 +318,30 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                               ],
                             ),
                           ),
-                          // Swap icon
+                          // Swap icon - Tap to swap points
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Icon(
-                              Icons.swap_horiz,
-                              color: AppColors.darkBlue,
-                              size: 32,
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.swap_horiz,
+                                color: AppColors.darkBlue,
+                                size: 32,
+                              ),
+                              onPressed: () async {
+                                // Swap Point A and Point B
+                                final tempArea = _mapFromArea;
+                                final tempPoint = _pointA;
+                                setState(() {
+                                  _mapFromArea = _mapToArea;
+                                  _mapToArea = tempArea;
+                                  _pointA = _pointB;
+                                  _pointB = tempPoint;
+                                  _isLoadingRoutes = true;
+                                });
+
+                                // Recalculate routes with swapped points
+                                await _recalculateRoutes();
+                              },
                             ),
                           ),
                           // To (PADULONG)
@@ -300,128 +375,6 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      // Fares
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Regular Fare
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AppColors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: AppColors.lightGray.withValues(
-                                    alpha: 0.5,
-                                  ),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'REGULAR FARE',
-                                    style: GoogleFonts.slackey(
-                                      fontSize: 10,
-                                      color: AppColors.gray,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '₱${_calculatedFare.toStringAsFixed(2)}',
-                                    style: GoogleFonts.slackey(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Discounted Fare
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(
-                                  alpha: 0.15,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'DISCOUNTED',
-                                    style: GoogleFonts.slackey(
-                                      fontSize: 10,
-                                      color: AppColors.primary,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '₱${(_calculatedFare * 0.8).toStringAsFixed(2)}',
-                                    style: GoogleFonts.slackey(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Student/Senior/PWD',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      color: AppColors.primary.withValues(
-                                        alpha: 0.8,
-                                      ),
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_mapDistance != null) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.lightGray.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.straighten,
-                                size: 16,
-                                color: AppColors.darkBlue,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Distance: ${_mapDistance!.toStringAsFixed(2)} km',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -463,50 +416,9 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                               ),
                             ),
                           ),
-                          // Show routing source badge
-                          if (_hybridResult != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _hybridResult!.fallbackUsed
-                                    ? Colors.orange.withValues(alpha: 0.2)
-                                    : Colors.green.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    _hybridResult!.fallbackUsed
-                                        ? Icons.alt_route
-                                        : Icons.check_circle,
-                                    size: 12,
-                                    color: _hybridResult!.fallbackUsed
-                                        ? Colors.orange
-                                        : Colors.green,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _hybridResult!.fallbackUsed
-                                        ? 'Jeepney-Based'
-                                        : 'Validated',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: _hybridResult!.fallbackUsed
-                                          ? Colors.orange
-                                          : Colors.green,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 2),
                       // Loading state
                       if (_isLoadingRoutes)
                         Center(
@@ -588,6 +500,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                                   fontSize: 11,
                                   color: AppColors.gray,
                                 ),
+                                textAlign: TextAlign.justify,
                               ),
                             ),
                           ],
@@ -597,7 +510,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                   ),
                 ),
               // Fare Info
-              const SizedBox(height: 24),
+              const SizedBox(height: 14),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -631,7 +544,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                       ),
                     ),
                     const Text(
-                      '• Student/Senior discount: 20%',
+                      '• Student/Senior/PWD discount: 20%',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textPrimary,
@@ -978,11 +891,19 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
   Widget _buildHybridRouteCard(int rank, SuggestedRoute suggestedRoute) {
     // Get rank colors and icons
     final rankColors = [
-      Colors.amber[700]!, // Gold
-      Colors.grey[600]!, // Silver
-      Colors.brown[600]!, // Bronze
+      Colors.amber[700]!, // Gold - 1st
+      Colors.grey[600]!, // Silver - 2nd
+      Colors.brown[600]!, // Bronze - 3rd
+      Colors.blue[600]!, // Blue - 4th
+      Colors.blue[600]!, // Blue - 5th
     ];
-    final rankIcons = [Icons.looks_one, Icons.looks_two, Icons.looks_3];
+    final rankIcons = [
+      Icons.looks_one,
+      Icons.looks_two,
+      Icons.looks_3,
+      Icons.looks_4,
+      Icons.looks_5,
+    ];
 
     final routes = suggestedRoute.routes;
 
@@ -1016,7 +937,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
               // Rank and route type
               Row(
                 children: [
-                  if (rank <= 3)
+                  if (rank <= 5)
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
@@ -1055,15 +976,62 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                     ),
                   ),
                   const Spacer(),
-                  Text(
-                    '\u20b1${suggestedRoute.totalFare.toStringAsFixed(2)}',
-                    style: GoogleFonts.slackey(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.darkBlue,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '\u20b1${suggestedRoute.totalFare.toStringAsFixed(2)}',
+                        style: GoogleFonts.slackey(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.darkBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '\u20b1${suggestedRoute.discountedFare.toStringAsFixed(2)} w/ 20% discount',
+                          style: GoogleFonts.openSans(
+                            fontSize: 11,
+                            color: Colors.green[800],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              // Journey Steps Header
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.lightGray.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.route, size: 14, color: Colors.grey[700]),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Journey Steps:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
               // Route segments
@@ -1072,44 +1040,80 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                 final isLast = entry.key == suggestedRoute.segments.length - 1;
 
                 if (segment.type == JourneySegmentType.walking) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8, left: 4),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.directions_walk,
-                          size: 16,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Walk ${(segment.distanceKm * 1000).toStringAsFixed(0)}m',
-                          style: TextStyle(
-                            fontSize: 13,
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.directions_walk,
+                            size: 16,
                             color: Colors.grey[700],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Walk ${(segment.distanceKm * 1000).toStringAsFixed(0)}m',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[800],
+                                ),
+                              ),
+                              Text(
+                                '~${segment.estimatedTimeMinutes.toStringAsFixed(0)} min',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   );
                 } else if (segment.type == JourneySegmentType.jeepneyRide) {
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+                  return Container(
+                    margin: EdgeInsets.only(bottom: isLast ? 0 : 8, left: 4),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.darkBlue.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppColors.darkBlue.withValues(alpha: 0.2),
+                      ),
+                    ),
                     child: Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(6),
+                          padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: AppColors.darkBlue,
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(
                             Icons.directions_bus,
-                            size: 16,
+                            size: 18,
                             color: Colors.white,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1132,17 +1136,38 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${(segment.distanceKm).toStringAsFixed(1)} km • ~${segment.estimatedTimeMinutes.toStringAsFixed(0)} min',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          '\u20b1${segment.fare.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.darkBlue,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '\u20b1${segment.fare.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.darkBlue,
+                              ),
+                            ),
+                            Text(
+                              '\u20b1${(segment.fare * 0.8).toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green[700],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1169,6 +1194,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
             ],
           ),
         ),

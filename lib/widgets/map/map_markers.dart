@@ -109,10 +109,10 @@ class SearchedLocationMarker extends StatelessWidget {
       children: [
         if (label != null)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: AppColors.darkBlue,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.3),
@@ -125,26 +125,26 @@ class SearchedLocationMarker extends StatelessWidget {
               label!,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: FontWeight.bold,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 1),
         Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
-          child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+          child: const Icon(Icons.location_on, color: Colors.red, size: 36),
         ),
       ],
     );

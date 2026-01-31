@@ -164,6 +164,12 @@ class SuggestedRoute {
     return transfers.join(', ');
   }
 
+  /// Calculate discounted fare (20% discount for students/seniors/PWD)
+  double get discountedFare => totalFare * 0.80;
+
+  /// Get discount amount
+  double get discountAmount => totalFare * 0.20;
+
   @override
   String toString() =>
       'SuggestedRoute($routeNames, $transferCount transfers, ₱${totalFare.toStringAsFixed(2)}, ${totalDistanceKm.toStringAsFixed(2)}km)';

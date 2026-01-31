@@ -352,6 +352,22 @@ class LocationService {
     return distance.as(LengthUnit.Meter, from, to);
   }
 
+  // ========== POSITION STREAM ==========
+
+  /// Get a stream of position updates for real-time location tracking
+  /// [distanceFilter] Minimum distance (in meters) before an update is triggered
+  Stream<Position> getPositionStream({
+    LocationAccuracy accuracy = LocationAccuracy.high,
+    int distanceFilter = 10,
+  }) {
+    return Geolocator.getPositionStream(
+      locationSettings: LocationSettings(
+        accuracy: accuracy,
+        distanceFilter: distanceFilter,
+      ),
+    );
+  }
+
   // ========== UTILITY ==========
 
   /// Clear geocoding cache

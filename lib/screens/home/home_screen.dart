@@ -27,18 +27,10 @@ class HomeScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Welcome to',
+                      'Welcome to Lejeepney',
                       style: GoogleFonts.slackey(
-                        fontSize: 16,
+                        fontSize: 27.5,
                         color: AppColors.textPrimary.withValues(alpha: 0.8),
-                      ),
-                    ),
-                    Text(
-                      'Lejeepney',
-                      style: GoogleFonts.slackey(
-                        fontSize: 32,
-                        color: AppColors.textPrimary,
-                        height: 1.2,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -128,7 +120,7 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Travel History Section
+              // Recent Activity Section
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -164,7 +156,7 @@ class HomeScreen extends StatelessWidget {
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          'Travel History',
+                          'Recent Activity',
                           style: GoogleFonts.slackey(
                             fontSize: 20,
                             color: AppColors.textPrimary,
@@ -174,13 +166,13 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
 
-                    // History Items
-                    const TravelHistoryItem(
+                    // Recent Activity Items
+                    const RecentActivityItem(
                       date: 'July 18, 2024',
                       route: 'Bankerohan to Maga...',
                     ),
                     const SizedBox(height: 12),
-                    const TravelHistoryItem(
+                    const RecentActivityItem(
                       date: 'July 20, 2024',
                       route: 'Bankerohan to Calinan',
                     ),

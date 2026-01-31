@@ -5,6 +5,11 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
 import '../auth/login_screen.dart';
+import 'recent_activity_screen.dart';
+import 'notifications_screen.dart';
+import 'settings_screen.dart';
+import 'about_screen.dart';
+import 'report_feedback_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -227,32 +232,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           _buildSettingItem(
                             icon: Icons.history,
-                            title: 'Travel History',
-                            onTap: () {},
+                            title: 'Recent Activity',
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const RecentActivityScreen(),
+                                ),
+                              );
+                            },
                           ),
                           _buildDivider(),
                           _buildSettingItem(
                             icon: Icons.notifications_outlined,
                             title: 'Notifications',
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const NotificationsScreen(),
+                                ),
+                              );
+                            },
                           ),
                           _buildDivider(),
                           _buildSettingItem(
                             icon: Icons.settings_outlined,
                             title: 'Settings',
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const SettingsScreen(),
+                                ),
+                              );
+                            },
                           ),
                           _buildDivider(),
                           _buildSettingItem(
                             icon: Icons.feedback_outlined,
                             title: 'Report & Feedback',
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ReportFeedbackScreen(),
+                                ),
+                              );
+                            },
                           ),
                           _buildDivider(),
                           _buildSettingItem(
                             icon: Icons.info_outline,
                             title: 'About',
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const AboutScreen(),
+                                ),
+                              );
+                            },
                           ),
                           if (isLoggedIn) ...[
                             _buildDivider(),

@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 
-class TravelHistoryItem extends StatelessWidget {
+class RecentActivityItem extends StatelessWidget {
   final String date;
   final String route;
   final VoidCallback? onTap;
 
-  const TravelHistoryItem({
+  const RecentActivityItem({
     super.key,
     required this.date,
     required this.route,

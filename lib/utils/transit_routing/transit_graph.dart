@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/jeepney_route.dart';
 import 'geo_utils.dart';
@@ -27,18 +28,28 @@ class TransitGraph {
 
   /// Initialize the graph by building nodes and edges
   void build() {
+    final stopwatch = Stopwatch()..start();
     _nodes.clear();
     _edges.clear();
     _adjacencyList.clear();
 
     // Add route endpoint nodes
     _addRouteEndpoints();
+    debugPrint('[TransitGraph] Added ${_nodes.length} endpoint nodes');
 
     // Find and add intersection nodes
     _findIntersections();
+    debugPrint(
+      '[TransitGraph] Found ${_intersections?.length ?? 0} route intersections',
+    );
 
     // Build edges between nodes
     _buildEdges();
+
+    stopwatch.stop();
+    debugPrint(
+      '[TransitGraph] Graph built: ${_nodes.length} nodes, ${_edges.length} edges in ${stopwatch.elapsedMilliseconds}ms',
+    );
   }
 
   /// Add start and end points of each route as nodes
@@ -68,9 +79,42 @@ class TransitGraph {
     }
   }
 
-  /// Find intersections between routes
+  // Cached bounding boxes for routes
+  final Map<int, Map<String, double>> _routeBoundingBoxes = {};
+
+  /// Pre-compute bounding boxes for all routes
+  void _precomputeBoundingBoxes() {
+    _routeBoundingBoxes.clear();
+    for (final route in _routes) {
+      if (route.path.isNotEmpty) {
+        _routeBoundingBoxes[route.id] = GeoUtils.getBoundingBox(route.path);
+      }
+    }
+  }
+
+  /// Check if two routes could possibly intersect using cached bounding boxes
+  bool _couldRoutesIntersect(JeepneyRoute route1, JeepneyRoute route2) {
+    final box1 = _routeBoundingBoxes[route1.id];
+    final box2 = _routeBoundingBoxes[route2.id];
+    if (box1 == null || box2 == null) return false;
+
+    final bufferDeg = config.maxTransferWalkingMeters / 111000.0;
+
+    return !(box1['maxLat']! + bufferDeg < box2['minLat']! ||
+        box1['minLat']! - bufferDeg > box2['maxLat']! ||
+        box1['maxLng']! + bufferDeg < box2['minLng']! ||
+        box1['minLng']! - bufferDeg > box2['maxLng']!);
+  }
+
+  /// Find intersections between routes (optimized with bounding box caching)
   void _findIntersections() {
     _intersections = [];
+
+    // Pre-compute bounding boxes once
+    _precomputeBoundingBoxes();
+
+    int skipped = 0;
+    int checked = 0;
 
     for (int i = 0; i < _routes.length; i++) {
       for (int j = i + 1; j < _routes.length; j++) {
@@ -79,14 +123,12 @@ class TransitGraph {
 
         if (route1.path.isEmpty || route2.path.isEmpty) continue;
 
-        // Quick bounding box check
-        if (!GeoUtils.boundingBoxesOverlap(
-          route1.path,
-          route2.path,
-          config.maxTransferWalkingMeters,
-        )) {
+        // Quick bounding box check using cached boxes
+        if (!_couldRoutesIntersect(route1, route2)) {
+          skipped++;
           continue;
         }
+        checked++;
 
         // Find closest points between the two routes
         final intersection = _findClosestPoints(route1, route2);
@@ -110,16 +152,20 @@ class TransitGraph {
         }
       }
     }
+
+    debugPrint(
+      '[TransitGraph] Intersection check: $checked pairs checked, $skipped skipped by bbox',
+    );
   }
 
-  /// Find the closest points between two routes
+  /// Find the closest points between two routes (optimized sampling)
   RouteIntersection? _findClosestPoints(
     JeepneyRoute route1,
     JeepneyRoute route2,
   ) {
-    // Sample paths for efficiency
-    final sampled1 = GeoUtils.samplePath(route1.path, maxPoints: 30);
-    final sampled2 = GeoUtils.samplePath(route2.path, maxPoints: 30);
+    // Reduced sampling for faster computation
+    final sampled1 = GeoUtils.samplePath(route1.path, maxPoints: 20);
+    final sampled2 = GeoUtils.samplePath(route2.path, maxPoints: 20);
 
     double minDistance = double.infinity;
     LatLng? bestPoint1;
@@ -266,13 +312,30 @@ class TransitGraph {
     _adjacencyList[nodeId]!.add(edge);
   }
 
-  /// Get all routes that pass near a point
+  /// Check if a point could be within a route's bounding box (with buffer)
+  bool _isPointNearRouteBBox(LatLng point, int routeId, double bufferMeters) {
+    final box = _routeBoundingBoxes[routeId];
+    if (box == null) return true; // If no bbox cached, check anyway
+
+    final bufferDeg = bufferMeters / 111000.0;
+    return point.latitude >= box['minLat']! - bufferDeg &&
+        point.latitude <= box['maxLat']! + bufferDeg &&
+        point.longitude >= box['minLng']! - bufferDeg &&
+        point.longitude <= box['maxLng']! + bufferDeg;
+  }
+
+  /// Get all routes that pass near a point (optimized with bbox pre-filter)
   List<RouteAccess> findRoutesNearPoint(LatLng point, {double? maxDistance}) {
     final maxDist = maxDistance ?? config.maxAccessWalkingMeters;
     final results = <RouteAccess>[];
 
     for (final route in _routes) {
       if (route.path.isEmpty) continue;
+
+      // Quick bounding box check first (skip expensive path distance calc)
+      if (!_isPointNearRouteBBox(point, route.id, maxDist)) {
+        continue;
+      }
 
       final closestPoint = GeoUtils.findClosestPointOnPath(point, route.path);
       final distance = GeoUtils.distanceMeters(point, closestPoint);

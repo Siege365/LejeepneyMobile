@@ -1,13 +1,15 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
-import 'dart:convert';
+import 'package:latlong2/latlong.dart';
 import '../../constants/app_colors.dart';
+import '../../constants/map_constants.dart';
 import '../../services/api_service.dart';
-import '../../utils/route_matcher.dart';
+import '../../services/location_service.dart';
+import '../../services/route_calculation_service.dart';
+import '../../utils/route_matcher.dart'; // Still needed for RouteMatchResult type
 import '../../utils/multi_transfer_matcher.dart';
 import '../../utils/transit_routing/transit_routing.dart';
 
@@ -16,6 +18,7 @@ class MapFareCalculatorScreen extends StatefulWidget {
   final LatLng? initialPointB;
   final String? initialPointAName;
   final String? initialPointBName;
+  final bool swapPoints; // Flag to swap points A and B
 
   const MapFareCalculatorScreen({
     super.key,
@@ -23,6 +26,7 @@ class MapFareCalculatorScreen extends StatefulWidget {
     this.initialPointB,
     this.initialPointAName,
     this.initialPointBName,
+    this.swapPoints = false,
   });
 
   @override
@@ -56,18 +60,35 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
   List<MultiTransferRoute> _multiTransferRoutes = [];
   List<SuggestedRoute> _suggestedRoutes = []; // New: hybrid routing results
   HybridRoutingResult? _hybridResult; // New: full hybrid result
-  final ApiService _apiService = ApiService();
-  final HybridTransitRouter _hybridRouter = HybridTransitRouter(
-    config: const HybridRoutingConfig(maxResults: 5, maxTransfers: 3),
-  ); // New: hybrid router with config matching search screen
+  final LocationService _locationService = LocationService();
+  final RouteCalculationService _routeCalculationService =
+      RouteCalculationService(apiService: ApiService());
 
   @override
   void initState() {
     super.initState();
     _initLocationService();
 
-    // Initialize with provided locations if available
-    if (widget.initialPointA != null) {
+    // Check if we should swap points
+    if (widget.swapPoints &&
+        widget.initialPointA != null &&
+        widget.initialPointB != null) {
+      // Swap: A becomes B, B becomes A
+      _pointA = widget.initialPointB;
+      _areaA = widget.initialPointBName ?? 'Selected Location';
+      _pointB = widget.initialPointA;
+      _areaB = widget.initialPointAName ?? 'Selected Location';
+      _isSelectingPointA = false;
+
+      // Automatically calculate route after swap
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _findMatchingJeepneyRoutes();
+        if (_pointA != null) {
+          _mapController.move(_pointA!, MapConstants.defaultZoom);
+        }
+      });
+    } else if (widget.initialPointA != null) {
+      // Normal initialization without swap
       _pointA = widget.initialPointA;
       _areaA = widget.initialPointAName ?? 'Selected Location';
       _isSelectingPointA = false;
@@ -86,7 +107,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
       // Center map on point A
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_pointA != null) {
-          _mapController.move(_pointA!, 14.0);
+          _mapController.move(_pointA!, MapConstants.defaultZoom);
         }
       });
     }
@@ -97,44 +118,21 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
     setState(() => _isLoadingLocation = true);
 
     try {
-      // Check if location services are enabled
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        debugPrint('Location services are disabled');
+      final result = await _locationService.getCurrentPosition();
+
+      if (result.isSuccess && result.location != null) {
+        _hasLocationPermission = true;
+
+        setState(() {
+          _userLocation = result.location;
+          _isLoadingLocation = false;
+        });
+
+        debugPrint('User location: $_userLocation');
+      } else {
+        debugPrint('Location error: ${result.error}');
         setState(() => _isLoadingLocation = false);
-        return;
       }
-
-      // Check and request permission
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          debugPrint('Location permission denied');
-          setState(() => _isLoadingLocation = false);
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        debugPrint('Location permission permanently denied');
-        setState(() => _isLoadingLocation = false);
-        return;
-      }
-
-      _hasLocationPermission = true;
-
-      // Get current position
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      setState(() {
-        _userLocation = LatLng(position.latitude, position.longitude);
-        _isLoadingLocation = false;
-      });
-
-      debugPrint('User location: $_userLocation');
     } catch (e) {
       debugPrint('Failed to get location: $e');
       setState(() => _isLoadingLocation = false);
@@ -192,14 +190,14 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: LatLng(7.0731, 125.6128), // Davao City
-              initialZoom: 14.0,
+              initialCenter: MapConstants.defaultLocation,
+              initialZoom: MapConstants.defaultZoom,
               onTap: (tapPosition, point) => _onMapTapped(point),
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.final_project_cce106',
+                urlTemplate: MapConstants.osmTileUrl,
+                userAgentPackageName: MapConstants.appUserAgent,
               ),
               // Route Path - drawn along roads
               if (_routePath.isNotEmpty)
@@ -373,7 +371,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
                       const SizedBox(width: 12),
                       Text(
                         'Creating route...',
-                        style: GoogleFonts.slackey(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                           color: Colors.white,
@@ -670,7 +668,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
     }
   }
 
-  /// Get accurate location name using Nominatim reverse geocoding
+  /// Get accurate location name using LocationService reverse geocoding
   /// Format: "Street Name, Area/Barangay"
   Future<void> _getLocationName(LatLng point, bool isPointA) async {
     setState(() {
@@ -678,33 +676,29 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
     });
 
     try {
-      final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse?'
-        'lat=${point.latitude}&lon=${point.longitude}&'
-        'format=json&addressdetails=1&zoom=18',
-      );
+      final result = await _locationService.reverseGeocode(point);
 
-      final response = await http.get(
-        url,
-        headers: {'User-Agent': 'Lejeepney App'},
-      );
+      if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final address = data['address'];
-
-        // Build accurate location name
-        String locationName = _buildLocationName(address);
-
+      if (result.isSuccess) {
         setState(() {
           if (isPointA) {
-            _areaA = locationName;
+            _areaA = result.formattedName;
           } else {
-            _areaB = locationName;
+            _areaB = result.formattedName;
+          }
+        });
+      } else {
+        setState(() {
+          if (isPointA) {
+            _areaA = 'Point A';
+          } else {
+            _areaB = 'Point B';
           }
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         if (isPointA) {
           _areaA = 'Point A';
@@ -713,51 +707,11 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
         }
       });
     } finally {
-      setState(() {
-        _isLoadingArea = false;
-      });
-    }
-  }
-
-  /// Build a readable location name from address components
-  /// Priority: Street/Road > Suburb/Barangay > City District
-  String _buildLocationName(Map<String, dynamic> address) {
-    String streetPart = '';
-    String areaPart = '';
-
-    // Get street/road name
-    if (address['road'] != null) {
-      streetPart = address['road'];
-    } else if (address['pedestrian'] != null) {
-      streetPart = address['pedestrian'];
-    } else if (address['footway'] != null) {
-      streetPart = address['footway'];
-    } else if (address['path'] != null) {
-      streetPart = address['path'];
-    }
-
-    // Get area/barangay name
-    if (address['suburb'] != null) {
-      areaPart = address['suburb'];
-    } else if (address['neighbourhood'] != null) {
-      areaPart = address['neighbourhood'];
-    } else if (address['village'] != null) {
-      areaPart = address['village'];
-    } else if (address['quarter'] != null) {
-      areaPart = address['quarter'];
-    } else if (address['city_district'] != null) {
-      areaPart = address['city_district'];
-    }
-
-    // Combine street and area
-    if (streetPart.isNotEmpty && areaPart.isNotEmpty) {
-      return '$streetPart, $areaPart';
-    } else if (streetPart.isNotEmpty) {
-      return streetPart;
-    } else if (areaPart.isNotEmpty) {
-      return areaPart;
-    } else {
-      return 'Unknown Location';
+      if (mounted) {
+        setState(() {
+          _isLoadingArea = false;
+        });
+      }
     }
   }
 
@@ -1019,69 +973,21 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
     });
 
     try {
-      // Fetch all admin-created jeepney routes from API
-      final jeepneyRoutes = await _apiService.fetchAllRoutes();
-
-      // Fetch landmarks for transfer point identification
-      List<Map<String, dynamic>>? landmarks;
-      try {
-        final landmarkData = await _apiService.fetchAllLandmarks();
-        landmarks = landmarkData
-            .map(
-              (l) => {
-                'id': l.id,
-                'name': l.name,
-                'latitude': l.latitude,
-                'longitude': l.longitude,
-              },
-            )
-            .toList();
-      } catch (e) {
-        debugPrint('Failed to fetch landmarks for transfer points: $e');
-      }
-
-      // Use hybrid router for best results
-      final hybridResult = await _hybridRouter.findRoutes(
+      final result = await _routeCalculationService.calculateRoutes(
         origin: _pointA!,
         destination: _pointB!,
-        jeepneyRoutes: jeepneyRoutes,
         osrmPath: _routePath.isNotEmpty ? _routePath : null,
-        landmarks: landmarks,
       );
 
-      debugPrint('Hybrid routing result: ${hybridResult.toString()}');
-      debugPrint('  - Primary source: ${hybridResult.primarySource}');
-      debugPrint('  - Fallback used: ${hybridResult.fallbackUsed}');
-      debugPrint('  - Routes found: ${hybridResult.suggestedRoutes.length}');
-
-      // Also do legacy matching for backward compatibility
-      List<RouteMatchResult> legacyMatches = [];
-      List<MultiTransferRoute> legacyMultiTransfer = [];
-
-      if (_routePath.isNotEmpty) {
-        legacyMatches = RouteMatcher.findMatchingRoutes(
-          userPath: _routePath,
-          jeepneyRoutes: jeepneyRoutes,
-          bufferMeters: 150.0,
-          minMatchPercentage: 50.0,
-          maxCount: 5,
-        );
-
-        if (legacyMatches.isEmpty || legacyMatches.length < 2) {
-          legacyMultiTransfer = MultiTransferMatcher.findMultiTransferRoutes(
-            userPath: _routePath,
-            jeepneyRoutes: jeepneyRoutes,
-            landmarks: landmarks,
-            maxResults: 5,
-          );
-        }
+      if (!result.success) {
+        throw Exception(result.errorMessage ?? 'Route calculation failed');
       }
 
       setState(() {
-        _matchedRoutes = legacyMatches;
-        _multiTransferRoutes = legacyMultiTransfer;
-        _suggestedRoutes = hybridResult.suggestedRoutes;
-        _hybridResult = hybridResult;
+        _matchedRoutes = result.legacyMatches;
+        _multiTransferRoutes = result.legacyMultiTransfer;
+        _suggestedRoutes = result.hybridSuggestedRoutes;
+        _hybridResult = result.hybridResult;
         _isMatchingRoutes = false;
       });
 
@@ -1124,6 +1030,9 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
       'fromLng': _pointA?.longitude,
       'toLat': _pointB?.latitude,
       'toLng': _pointB?.longitude,
+      'pointA': _pointA, // Add point coordinates
+      'pointB': _pointB, // Add point coordinates
+      'routePath': _routePath, // Add route path
       // Legacy matching results (backward compatibility)
       'matchedRoutes': _matchedRoutes
           .map((m) => {'route': m.route, 'matchPercentage': m.matchPercentage})
@@ -1152,6 +1061,6 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
       _suggestedRoutes = [];
       _hybridResult = null;
     });
-    _mapController.move(LatLng(7.0731, 125.6128), 14.0);
+    _mapController.move(MapConstants.defaultLocation, MapConstants.defaultZoom);
   }
 }
