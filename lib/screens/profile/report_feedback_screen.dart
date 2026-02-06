@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../utils/ticket_label_selector.dart';
 import '../support/ticket_list_screen.dart';
 import '../support/create_ticket_screen.dart';
 
@@ -305,21 +306,25 @@ class _ReportFeedbackScreenState extends State<ReportFeedbackScreen> {
         'icon': Icons.route,
         'title': 'Route not working',
         'description': 'Having trouble finding routes?',
+        'topicId': TicketLabelSelector.topicRouteNotWorking,
       },
       {
         'icon': Icons.attach_money,
         'title': 'Incorrect fare',
         'description': 'Report wrong fare calculations',
+        'topicId': TicketLabelSelector.topicIncorrectFare,
       },
       {
         'icon': Icons.location_off,
         'title': 'Location issues',
         'description': 'GPS or location problems',
+        'topicId': TicketLabelSelector.topicLocationIssues,
       },
       {
         'icon': Icons.speed,
         'title': 'App performance',
         'description': 'App running slow or crashing',
+        'topicId': TicketLabelSelector.topicAppPerformance,
       },
     ];
 
@@ -341,7 +346,9 @@ class _ReportFeedbackScreenState extends State<ReportFeedbackScreen> {
           return Column(
             children: [
               InkWell(
-                onTap: () => _navigateToCreateTicket('general'),
+                onTap: () => _navigateToCreateTicketWithTopic(
+                  topic['topicId'] as String,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
@@ -392,7 +399,7 @@ class _ReportFeedbackScreenState extends State<ReportFeedbackScreen> {
     );
   }
 
-  void _navigateToCreateTicket(String type) {
+  void _navigateToCreateTicket(String quickActionType) {
     if (_user == null) {
       _showLoginRequiredDialog();
       return;
@@ -401,8 +408,29 @@ class _ReportFeedbackScreenState extends State<ReportFeedbackScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            CreateTicketScreen(userEmail: _user!.email, userName: _user!.name),
+        builder: (context) => CreateTicketScreen(
+          userEmail: _user!.email,
+          userName: _user!.name,
+          quickActionType: quickActionType,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToCreateTicketWithTopic(String topicId) {
+    if (_user == null) {
+      _showLoginRequiredDialog();
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateTicketScreen(
+          userEmail: _user!.email,
+          userName: _user!.name,
+          commonTopicId: topicId,
+        ),
       ),
     );
   }

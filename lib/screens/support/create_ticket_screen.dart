@@ -1,16 +1,27 @@
 import 'package:flutter/material.dart';
 import '../../models/support_ticket.dart';
 import '../../services/support_service.dart';
+import '../../services/recent_activity_service.dart';
+import '../../utils/ticket_label_selector.dart';
 
-/// Screen to create a new support ticket
+/// Screen to create a new support ticket with smart label auto-selection
+/// Supports pre-selection from quick actions and common topics
 class CreateTicketScreen extends StatefulWidget {
   final String userEmail;
   final String userName;
+
+  /// Optional: Pre-selected quick action type (bug, technical, feedback, general)
+  final String? quickActionType;
+
+  /// Optional: Pre-selected common topic ID
+  final String? commonTopicId;
 
   const CreateTicketScreen({
     super.key,
     required this.userEmail,
     required this.userName,
+    this.quickActionType,
+    this.commonTopicId,
   });
 
   @override
@@ -26,6 +37,16 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   TicketType _selectedType = TicketType.general;
   TicketPriority _selectedPriority = TicketPriority.medium;
   bool _isSubmitting = false;
+  bool _hasSubmitted = false; // Prevent duplicate submissions
+  String? _autoSelectReason;
+  bool _isAutoSelected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _applySmartLabels();
+    _messageController.addListener(_onMessageChanged);
+  }
 
   @override
   void dispose() {
@@ -34,31 +55,104 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     super.dispose();
   }
 
+  /// Apply smart label selection based on quick action or topic
+  void _applySmartLabels() {
+    TicketLabelSelector? selector;
+
+    if (widget.quickActionType != null) {
+      selector = TicketLabelSelector.fromQuickAction(widget.quickActionType!);
+    } else if (widget.commonTopicId != null) {
+      selector = TicketLabelSelector.fromCommonTopic(widget.commonTopicId!);
+    }
+
+    if (selector != null) {
+      setState(() {
+        _selectedType = selector!.type;
+        _selectedPriority = selector.priority;
+        _autoSelectReason = selector.autoSelectReason;
+        _isAutoSelected = true;
+      });
+    }
+  }
+
+  /// Analyze message content and suggest labels (debounced)
+  void _onMessageChanged() {
+    // Only auto-suggest if user hasn't manually changed and message is substantial
+    if (!_isAutoSelected && _messageController.text.length > 20) {
+      final selector = TicketLabelSelector.fromMessageContent(
+        _messageController.text,
+      );
+
+      if (selector.autoSelectReason != null) {
+        // Check if priority should be escalated
+        final escalatedPriority = TicketLabelSelector.escalatePriority(
+          selector.priority,
+          _messageController.text,
+        );
+
+        setState(() {
+          _selectedType = selector.type;
+          _selectedPriority = escalatedPriority;
+          _autoSelectReason = selector.autoSelectReason;
+        });
+      }
+    }
+  }
+
   Future<void> _submitTicket() async {
+    // Prevent duplicate submissions
+    if (_hasSubmitted || _isSubmitting) {
+      debugPrint('[CreateTicket] Prevented duplicate submission');
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _isSubmitting = true;
+      _hasSubmitted = true;
     });
 
-    final result = await _supportService.createTicket(
-      name: widget.userName,
-      email: widget.userEmail,
-      subject: _subjectController.text.trim(),
-      message: _messageController.text.trim(),
-      type: _selectedType,
-      priority: _selectedPriority,
-    );
+    try {
+      final result = await _supportService.createTicket(
+        name: widget.userName,
+        email: widget.userEmail,
+        subject: _subjectController.text.trim(),
+        message: _messageController.text.trim(),
+        type: _selectedType,
+        priority: _selectedPriority,
+      );
 
-    if (mounted) {
-      setState(() {
-        _isSubmitting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
 
-      if (result.success) {
-        _showSuccessDialog(result.ticketId!);
-      } else {
-        _showErrorSnackbar(result.errorMessage ?? 'Failed to create ticket');
+        if (result.success) {
+          // Backend automatically creates notification for ticket creation
+          // Record in recent activity
+          await RecentActivityService.addTicketCreated(
+            userId: widget.userEmail,
+            ticketId: result.ticketId!,
+            subject: _subjectController.text.trim(),
+            ticketType: _selectedType.displayName,
+          );
+          _showSuccessDialog(result.ticketId!);
+        } else {
+          // Reset submission flag on error to allow retry
+          setState(() {
+            _hasSubmitted = false;
+          });
+          _showErrorSnackbar(result.errorMessage ?? 'Failed to create ticket');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _hasSubmitted = false;
+        });
+        _showErrorSnackbar('An unexpected error occurred. Please try again.');
       }
     }
   }
@@ -123,6 +217,11 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: _submitTicket,
+        ),
       ),
     );
   }
@@ -268,6 +367,17 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                             width: 2,
                           ),
                         ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.red.shade300),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: Colors.red.shade600,
+                            width: 2,
+                          ),
+                        ),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,
@@ -279,6 +389,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                         }
                         if (value.trim().length < 5) {
                           return 'Subject must be at least 5 characters';
+                        }
+                        if (value.trim().length > 100) {
+                          return 'Subject must be less than 100 characters';
                         }
                         return null;
                       },
@@ -313,6 +426,17 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                             width: 2,
                           ),
                         ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.red.shade300),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: Colors.red.shade600,
+                            width: 2,
+                          ),
+                        ),
                         contentPadding: const EdgeInsets.all(16),
                       ),
                       validator: (value) {
@@ -321,6 +445,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                         }
                         if (value.trim().length < 10) {
                           return 'Message must be at least 10 characters';
+                        }
+                        if (value.trim().length > 2000) {
+                          return 'Message must be less than 2000 characters';
                         }
                         return null;
                       },
@@ -336,7 +463,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isSubmitting ? null : _submitTicket,
+                    onPressed: (_isSubmitting || _hasSubmitted)
+                        ? null
+                        : _submitTicket,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF4A90A4),
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -386,6 +515,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             if (selected) {
               setState(() {
                 _selectedType = type;
+                _isAutoSelected = false; // User manually changed
               });
             }
           },
@@ -414,6 +544,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               onTap: () {
                 setState(() {
                   _selectedPriority = priority;
+                  _isAutoSelected = false; // User manually changed
                 });
               },
               borderRadius: BorderRadius.circular(8),

@@ -1,47 +1,78 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
+import '../../models/recent_activity_model.dart';
+import '../../services/recent_activity_service_v2.dart';
 
 /// Screen to display user's recent activity
-class RecentActivityScreen extends StatelessWidget {
+class RecentActivityScreen extends StatefulWidget {
   const RecentActivityScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Sample activity data - in real app, this would come from a service
-    final List<ActivityItem> activities = [
-      ActivityItem(
-        icon: Icons.route,
-        title: 'Route Calculated',
-        subtitle: 'SM City to Gaisano Mall',
-        time: DateTime.now().subtract(const Duration(hours: 1)),
-      ),
-      ActivityItem(
-        icon: Icons.search,
-        title: 'Location Search',
-        subtitle: 'Searched for "Ayala Center"',
-        time: DateTime.now().subtract(const Duration(hours: 3)),
-      ),
-      ActivityItem(
-        icon: Icons.calculate,
-        title: 'Fare Calculated',
-        subtitle: 'P25.00 - 12J route',
-        time: DateTime.now().subtract(const Duration(hours: 5)),
-      ),
-      ActivityItem(
-        icon: Icons.route,
-        title: 'Route Calculated',
-        subtitle: 'Robinsons to Terminal',
-        time: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-      ActivityItem(
-        icon: Icons.bookmark,
-        title: 'Route Saved',
-        subtitle: 'Home to Work route',
-        time: DateTime.now().subtract(const Duration(days: 2)),
-      ),
-    ];
+  State<RecentActivityScreen> createState() => _RecentActivityScreenState();
+}
 
+class _RecentActivityScreenState extends State<RecentActivityScreen> {
+  List<RecentActivityModel> _activities = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadActivities();
+  }
+
+  Future<void> _loadActivities() async {
+    setState(() => _isLoading = true);
+
+    // Load activities from local database
+    final activities = await RecentActivityServiceV2.getActivities();
+
+    setState(() {
+      _activities = activities;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _deleteActivity(RecentActivityModel activity) async {
+    if (activity.id != null) {
+      await RecentActivityServiceV2.deleteActivity(
+        activity.id!,
+        serverId: activity.serverId,
+      );
+      _loadActivities();
+    }
+  }
+
+  Future<void> _clearAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear All Activities'),
+        content: const Text(
+          'Are you sure you want to clear all recent activities?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Clear', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await RecentActivityServiceV2.clearAll();
+      _loadActivities();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
@@ -58,39 +89,55 @@ class RecentActivityScreen extends StatelessWidget {
             color: AppColors.textPrimary,
           ),
         ),
+        actions: [
+          if (_activities.isNotEmpty)
+            IconButton(
+              icon: const Icon(
+                Icons.delete_sweep,
+                color: AppColors.textPrimary,
+              ),
+              onPressed: _clearAll,
+              tooltip: 'Clear all',
+            ),
+        ],
       ),
-      body: activities.isEmpty
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _activities.isEmpty
           ? _buildEmptyState()
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: activities.length,
-              itemBuilder: (context, index) {
-                final activity = activities[index];
-                final showDateHeader =
-                    index == 0 ||
-                    !_isSameDay(activities[index - 1].time, activity.time);
+          : RefreshIndicator(
+              onRefresh: _loadActivities,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _activities.length,
+                itemBuilder: (context, index) {
+                  final activity = _activities[index];
+                  final showDateHeader =
+                      index == 0 ||
+                      _activities[index - 1].dateHeader != activity.dateHeader;
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (showDateHeader) ...[
-                      if (index != 0) const SizedBox(height: 16),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          _formatDateHeader(activity.time),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade600,
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (showDateHeader) ...[
+                        if (index != 0) const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            activity.dateHeader,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
+                      _buildActivityCard(activity),
                     ],
-                    _buildActivityCard(activity),
-                  ],
-                );
-              },
+                  );
+                },
+              ),
             ),
     );
   }
@@ -120,105 +167,128 @@ class RecentActivityScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActivityCard(ActivityItem activity) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(12),
+  Widget _buildActivityCard(RecentActivityModel activity) {
+    return Dismissible(
+      key: Key(activity.id?.toString() ?? DateTime.now().toString()),
+      direction: DismissDirection.endToStart,
+      onDismissed: (_) => _deleteActivity(activity),
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  _getActivityIcon(activity.activityType),
+                  color: AppColors.darkBlue,
+                  size: 24,
+                ),
               ),
-              child: Icon(activity.icon, color: AppColors.darkBlue, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    activity.title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _getActivityTitle(activity),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (!activity.isSynced)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Icon(
+                              Icons.cloud_off,
+                              size: 14,
+                              color: Colors.grey.shade400,
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    activity.subtitle,
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      activity.subtitle ?? '',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Text(
-              _formatTime(activity.time),
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-            ),
-          ],
+              Text(
+                activity.formattedTime,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-
-  String _formatDateHeader(DateTime date) {
-    final now = DateTime.now();
-    if (_isSameDay(date, now)) {
-      return 'Today';
-    } else if (_isSameDay(date, now.subtract(const Duration(days: 1)))) {
-      return 'Yesterday';
-    } else {
-      return '${_monthName(date.month)} ${date.day}, ${date.year}';
+  String _getActivityTitle(RecentActivityModel activity) {
+    switch (activity.activityType) {
+      case 'route_calculated':
+        return 'Route Calculated';
+      case 'fare_calculated':
+        return 'Fare Calculated';
+      case 'location_search':
+        return 'Location Searched';
+      case 'route_saved':
+        return 'Route Saved';
+      case 'support_ticket':
+      case 'customer_service':
+        return 'Support Ticket';
+      default:
+        return activity.title;
     }
   }
 
-  String _formatTime(DateTime date) {
-    final hour = date.hour > 12 ? date.hour - 12 : date.hour;
-    final period = date.hour >= 12 ? 'PM' : 'AM';
-    final minute = date.minute.toString().padLeft(2, '0');
-    return '$hour:$minute $period';
+  IconData _getActivityIcon(String activityType) {
+    switch (activityType) {
+      case 'route_calculated':
+        return Icons.route;
+      case 'fare_calculated':
+        return Icons.calculate;
+      case 'location_search':
+        return Icons.search;
+      case 'route_saved':
+        return Icons.bookmark;
+      case 'support_ticket':
+      case 'customer_service':
+        return Icons.confirmation_number;
+      default:
+        return Icons.history;
+    }
   }
-
-  String _monthName(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return months[month - 1];
-  }
-}
-
-class ActivityItem {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final DateTime time;
-
-  ActivityItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.time,
-  });
 }

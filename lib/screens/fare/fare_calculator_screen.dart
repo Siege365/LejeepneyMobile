@@ -8,6 +8,7 @@ import '../../services/route_calculation_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../utils/multi_transfer_matcher.dart';
 import '../../utils/transit_routing/transit_routing.dart';
+import '../../services/recent_activity_service_v2.dart';
 import 'map_fare_calculator_screen.dart';
 import '../main_navigation.dart';
 
@@ -70,6 +71,18 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
           _hybridSuggestedRoutes = result.hybridSuggestedRoutes;
           _isLoadingRoutes = false;
         });
+
+        // Track route calculation activity
+        final routeNames = result.hybridSuggestedRoutes
+            .take(3)
+            .map((r) => r.routeNames)
+            .join(', ');
+        RecentActivityServiceV2.addRouteCalculation(
+          fromLocation: _mapFromArea ?? 'Point A',
+          toLocation: _mapToArea ?? 'Point B',
+          routeNames: routeNames.isNotEmpty ? routeNames : 'No routes found',
+          fare: _calculatedFare,
+        );
       }
     } catch (e) {
       debugPrint('Error recalculating routes: $e');
@@ -110,7 +123,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                 'Calculate your jeepney fare',
                 style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
 
               // Default state when not used
               if (_calculatedFare == 0)
@@ -162,6 +175,15 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                         _mapFromArea = data['from'];
                         _mapToArea = data['to'];
                         _calculatedFare = data['fare'];
+
+                        // Track fare calculation activity
+                        if (_calculatedFare > 0) {
+                          RecentActivityServiceV2.addFareCalculation(
+                            fromLocation: _mapFromArea ?? 'Point A',
+                            toLocation: _mapToArea ?? 'Point B',
+                            fare: _calculatedFare,
+                          );
+                        }
 
                         // Store coordinates and route path for swap functionality
                         _pointA = data['pointA'] as LatLng?;

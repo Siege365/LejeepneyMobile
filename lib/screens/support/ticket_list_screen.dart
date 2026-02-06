@@ -170,8 +170,22 @@ class _TicketListScreenState extends State<TicketListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _navigateToCreateTicket,
         backgroundColor: const Color(0xFF4A90A4),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('New Ticket', style: TextStyle(color: Colors.white)),
+        elevation: 4,
+        extendedPadding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 14,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        icon: const Icon(Icons.add, color: Colors.white, size: 24),
+        label: const Text(
+          'New Ticket',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
       ),
     );
   }

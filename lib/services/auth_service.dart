@@ -187,6 +187,7 @@ class AuthService {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
             },
             body: jsonEncode({
               'name': sanitizedName,
@@ -250,6 +251,7 @@ class AuthService {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
             },
             body: jsonEncode({'email': sanitizedEmail, 'password': password}),
           )
@@ -302,6 +304,7 @@ class AuthService {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
                 'Authorization': 'Bearer $token',
+                'ngrok-skip-browser-warning': 'true',
               },
             )
             .timeout(_timeout);
@@ -335,6 +338,7 @@ class AuthService {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
               'Authorization': 'Bearer $token',
+              'ngrok-skip-browser-warning': 'true',
             },
           )
           .timeout(_timeout);

@@ -17,8 +17,10 @@ import '../../widgets/route/suggested_routes_modal.dart';
 import '../../widgets/route/routes_list_panel.dart';
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
+import '../../services/recent_activity_service_v2.dart';
 import '../../models/jeepney_route.dart';
 import '../../utils/transit_routing/transit_routing.dart';
+import '../../utils/resilient_tile_provider.dart';
 
 class SearchScreen extends StatefulWidget {
   final int? autoSelectRouteId;
@@ -86,15 +88,17 @@ class _SearchScreenState extends State<SearchScreen> {
     super.initState();
     _searchController.addListener(_onSearchChanged);
 
+    // Start initialization immediately without blocking
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Don't await - let it run in background
       _initializeScreen();
     });
   }
 
   Future<void> _initializeScreen() async {
-    await _getCurrentLocation();
-    await _fetchRoutes();
+    // Parallelize location and route fetching for faster initialization
+    await Future.wait([_getCurrentLocation(), _fetchRoutes()]);
     _handleAutoSelection();
     _handleLandmarkNavigation();
   }
@@ -281,11 +285,17 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    while (_isLoadingLocation) {
-      await Future.delayed(const Duration(milliseconds: 100));
+    // Don't block - just check if location is ready
+    if (_isLoadingLocation) {
+      // Wait briefly for location, but don't block indefinitely
+      int attempts = 0;
+      while (_isLoadingLocation && mounted && attempts < 10) {
+        await Future.delayed(const Duration(milliseconds: 200));
+        attempts++;
+      }
     }
 
-    if (_currentLocation == null) {
+    if (_currentLocation == null && !_isLoadingLocation) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -314,7 +324,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
       _mapController.move(landmarkLocation, MapConstants.searchZoom);
 
-      Future.delayed(const Duration(milliseconds: 500), () {
+      Future.delayed(const Duration(milliseconds: 200), () {
         widget.onAutoSelectionComplete?.call();
       });
     }
@@ -415,6 +425,14 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _selectPlace(PlaceSearchResult place) {
+    // Track location search activity
+    RecentActivityServiceV2.addLocationSearch(
+      searchQuery: _searchController.text.isEmpty
+          ? place.displayName
+          : _searchController.text,
+      resultName: place.displayName,
+    );
+
     setState(() {
       _currentAddress = place.displayName;
       _showSearchResults = false;
@@ -523,6 +541,21 @@ class _SearchScreenState extends State<SearchScreen> {
           _calculatedRoutes = result.suggestedRoutes;
           _isCalculatingRoute = false;
         });
+
+        // Track route calculation if routes were found
+        if (result.suggestedRoutes.isNotEmpty) {
+          final routeNames = result.suggestedRoutes
+              .take(3)
+              .map((r) => r.routeNames)
+              .join(', ');
+          final totalFare = result.suggestedRoutes.first.totalFare;
+          RecentActivityServiceV2.addRouteCalculation(
+            fromLocation: _currentAddress,
+            toLocation: _searchedPlaceName ?? 'Searched location',
+            routeNames: routeNames,
+            fare: totalFare,
+          );
+        }
 
         // Show feedback if no routes found
         if (result.suggestedRoutes.isEmpty) {
@@ -677,10 +710,14 @@ class _SearchScreenState extends State<SearchScreen> {
           TileLayer(
             urlTemplate: MapConstants.osmTileUrl,
             userAgentPackageName: MapConstants.appUserAgent,
-            tileProvider: NetworkTileProvider(),
-            errorTileCallback: (tile, error, stackTrace) {
-              debugPrint('Tile loading error (${tile.coordinates}): $error');
-            },
+            maxNativeZoom: 19,
+            maxZoom: 19,
+            keepBuffer: 2,
+            tileProvider: ResilientTileProvider(
+              maxRetries: 2,
+              retryDelay: const Duration(milliseconds: 500),
+              userAgent: MapConstants.appUserAgent,
+            ),
           ),
           // Current location marker
           if (_currentLocation != null)

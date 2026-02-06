@@ -12,6 +12,7 @@ import '../../services/route_calculation_service.dart';
 import '../../utils/route_matcher.dart'; // Still needed for RouteMatchResult type
 import '../../utils/multi_transfer_matcher.dart';
 import '../../utils/transit_routing/transit_routing.dart';
+import '../../utils/resilient_tile_provider.dart';
 
 class MapFareCalculatorScreen extends StatefulWidget {
   final LatLng? initialPointA;
@@ -198,6 +199,14 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
               TileLayer(
                 urlTemplate: MapConstants.osmTileUrl,
                 userAgentPackageName: MapConstants.appUserAgent,
+                maxNativeZoom: 19,
+                maxZoom: 19,
+                keepBuffer: 2,
+                tileProvider: ResilientTileProvider(
+                  maxRetries: 2,
+                  retryDelay: const Duration(milliseconds: 500),
+                  userAgent: MapConstants.appUserAgent,
+                ),
               ),
               // Route Path - drawn along roads
               if (_routePath.isNotEmpty)

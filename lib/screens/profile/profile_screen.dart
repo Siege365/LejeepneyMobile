@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/ticket_notification_service.dart';
 import '../../utils/page_transitions.dart';
 import '../auth/login_screen.dart';
 import 'recent_activity_screen.dart';
@@ -23,11 +24,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
   UserModel? _user;
   bool _isLoading = true;
   bool _isLoggingOut = false;
+  int _unreadNotificationCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadUser();
+    _initNotificationBadge();
+  }
+
+  void _initNotificationBadge() {
+    // Listen for unread count changes
+    TicketNotificationService.instance.addUnreadCountListener(
+      _onUnreadCountChanged,
+    );
+    // Fetch initial count
+    TicketNotificationService.instance.fetchUnreadCount();
+  }
+
+  void _onUnreadCountChanged(int count) {
+    if (mounted) {
+      setState(() => _unreadNotificationCount = count);
+    }
+  }
+
+  @override
+  void dispose() {
+    TicketNotificationService.instance.removeUnreadCountListener(
+      _onUnreadCountChanged,
+    );
+    super.dispose();
   }
 
   Future<void> _loadUser() async {
@@ -247,14 +273,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           _buildSettingItem(
                             icon: Icons.notifications_outlined,
                             title: 'Notifications',
-                            onTap: () {
-                              Navigator.push(
+                            badge: _unreadNotificationCount > 0
+                                ? _unreadNotificationCount
+                                : null,
+                            onTap: () async {
+                              await Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) =>
                                       const NotificationsScreen(),
                                 ),
                               );
+                              // Refresh count when returning from notifications
+                              TicketNotificationService.instance
+                                  .fetchUnreadCount();
                             },
                           ),
                           _buildDivider(),
@@ -322,6 +354,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String title,
     required VoidCallback onTap,
     bool isDestructive = false,
+    int? badge,
   }) {
     return ListTile(
       leading: Icon(
@@ -335,10 +368,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           color: isDestructive ? AppColors.error : AppColors.textPrimary,
         ),
       ),
-      trailing: const Icon(
-        Icons.arrow_forward_ios,
-        size: 16,
-        color: AppColors.gray,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (badge != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: AppColors.error,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                badge > 99 ? '99+' : badge.toString(),
+                style: const TextStyle(
+                  color: AppColors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.gray),
+        ],
       ),
       onTap: onTap,
     );

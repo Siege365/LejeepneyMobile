@@ -55,8 +55,23 @@ class ApiService {
 
   // HTTP client with timeout
   final http.Client _client = http.Client();
-  static const Duration _timeout = Duration(seconds: 90); // Increased for large route data
+  static const Duration _timeout = Duration(
+    seconds: 90,
+  ); // Increased for large route data
   static const int _maxRetries = 3;
+
+  // Helper method to get standard headers with ngrok bypass
+  Map<String, String> _getHeaders({Map<String, String>? additional}) {
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    };
+    if (additional != null) {
+      headers.addAll(additional);
+    }
+    return headers;
+  }
 
   // ========== LANDMARKS API ==========
 
@@ -82,7 +97,9 @@ class ApiService {
         '$baseUrl/landmarks',
       ).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
 
-      final response = await _client.get(uri).timeout(_timeout);
+      final response = await _client
+          .get(uri, headers: _getHeaders())
+          .timeout(_timeout);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -104,7 +121,7 @@ class ApiService {
   Future<List<Landmark>> fetchFeaturedLandmarks() async {
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl/landmarks/featured'))
+          .get(Uri.parse('$baseUrl/landmarks/featured'), headers: _getHeaders())
           .timeout(_timeout);
 
       if (response.statusCode == 200) {
@@ -128,7 +145,10 @@ class ApiService {
     try {
       final apiCategory = Landmark.toCategoryApi(category);
       final response = await _client
-          .get(Uri.parse('$baseUrl/landmarks/category/$apiCategory'))
+          .get(
+            Uri.parse('$baseUrl/landmarks/category/$apiCategory'),
+            headers: _getHeaders(),
+          )
           .timeout(_timeout);
 
       if (response.statusCode == 200) {
@@ -157,10 +177,7 @@ class ApiService {
       final response = await _client
           .post(
             Uri.parse('$baseUrl/landmarks/nearby'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
+            headers: _getHeaders(),
             body: json.encode({
               'latitude': latitude,
               'longitude': longitude,
@@ -189,7 +206,7 @@ class ApiService {
   Future<Landmark> fetchLandmarkById(int id) async {
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl/landmarks/$id'))
+          .get(Uri.parse('$baseUrl/landmarks/$id'), headers: _getHeaders())
           .timeout(_timeout);
 
       if (response.statusCode == 200) {
@@ -215,21 +232,22 @@ class ApiService {
 
     while (retryCount < _maxRetries) {
       try {
-        debugPrint('[API] Fetching routes (attempt ${retryCount + 1}/$_maxRetries)...');
-        
+        debugPrint(
+          '[API] Fetching routes (attempt ${retryCount + 1}/$_maxRetries)...',
+        );
+
         final response = await _client
             .get(
               Uri.parse('$baseUrl/routes'),
-              headers: {
-                'Accept': 'application/json',
-                'Connection': 'keep-alive',
-              },
+              headers: _getHeaders(additional: {'Connection': 'keep-alive'}),
             )
             .timeout(_timeout);
 
         if (response.statusCode == 200) {
-          debugPrint('[API] Routes response received (${response.body.length} bytes)');
-          
+          debugPrint(
+            '[API] Routes response received (${response.body.length} bytes)',
+          );
+
           // Parse in try-catch to handle partial JSON
           try {
             final data = json.decode(response.body);
@@ -242,17 +260,23 @@ class ApiService {
             }
           } on FormatException catch (e) {
             debugPrint('[API] JSON parsing failed: ${e.message}');
-            throw ApiException('Incomplete data received from server. Please try again.');
+            throw ApiException(
+              'Incomplete data received from server. Please try again.',
+            );
           }
         }
 
-        throw ApiException('Failed to fetch routes (status: ${response.statusCode})');
+        throw ApiException(
+          'Failed to fetch routes (status: ${response.statusCode})',
+        );
       } on SocketException catch (e) {
         lastError = e;
         debugPrint('[API] Network error (attempt ${retryCount + 1}): $e');
         retryCount++;
         if (retryCount < _maxRetries) {
-          await Future.delayed(Duration(seconds: 2 * retryCount)); // Exponential backoff
+          await Future.delayed(
+            Duration(seconds: 2 * retryCount),
+          ); // Exponential backoff
           continue;
         }
       } on http.ClientException catch (e) {
@@ -287,7 +311,7 @@ class ApiService {
   Future<JeepneyRoute> fetchRouteById(int id) async {
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl/routes/$id'))
+          .get(Uri.parse('$baseUrl/routes/$id'), headers: _getHeaders())
           .timeout(_timeout);
 
       if (response.statusCode == 200) {
@@ -316,10 +340,7 @@ class ApiService {
       final response = await _client
           .post(
             Uri.parse('$baseUrl/routes/find'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
+            headers: _getHeaders(),
             body: json.encode({
               'from_lat': fromLat,
               'from_lng': fromLng,
@@ -361,7 +382,7 @@ class ApiService {
       final response = await _client
           .post(
             Uri.parse('$baseUrl/fares/calculate'),
-            headers: {'Content-Type': 'application/json'},
+            headers: _getHeaders(),
             body: json.encode({
               'from': {'lat': fromLat, 'lng': fromLng},
               'to': {'lat': toLat, 'lng': toLng},
@@ -417,7 +438,7 @@ class ApiService {
   Future<FareRates> fetchFareRates() async {
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl/fares/rates'))
+          .get(Uri.parse('$baseUrl/fares/rates'), headers: _getHeaders())
           .timeout(_timeout);
 
       if (response.statusCode == 200) {
@@ -439,7 +460,7 @@ class ApiService {
   Future<bool> healthCheck() async {
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl/landmarks'))
+          .get(Uri.parse('$baseUrl/landmarks'), headers: _getHeaders())
           .timeout(const Duration(seconds: 5));
       return response.statusCode == 200;
     } catch (e) {

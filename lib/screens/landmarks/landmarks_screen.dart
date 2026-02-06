@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../constants/app_colors.dart';
 import '../../models/landmark.dart';
 import '../../services/api_service.dart';
+import '../../services/recent_activity_service_v2.dart';
 import '../main_navigation.dart';
 
 class LandmarksScreen extends StatefulWidget {
@@ -232,6 +233,12 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                     Expanded(
                       child: TextField(
                         controller: _searchController,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        cursorColor: AppColors.darkBlue,
                         onChanged: (value) {
                           setState(() {
                             _searchQuery = value;
@@ -244,8 +251,13 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                             fontSize: 14,
                           ),
                           border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          isDense: true,
                           contentPadding: const EdgeInsets.symmetric(
-                            vertical: 14,
+                            vertical: 12,
                           ),
                         ),
                       ),
@@ -465,6 +477,12 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () {
+            // Track landmark search activity
+            RecentActivityServiceV2.addLocationSearch(
+              searchQuery: landmark.category,
+              resultName: landmark.name,
+            );
+
             // TODO: Navigate to landmark detail or show on map
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

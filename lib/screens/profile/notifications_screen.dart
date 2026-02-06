@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
+import '../../services/support_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/ticket_notification_service.dart';
+import '../support/ticket_detail_screen.dart';
 
-/// Screen to manage notification settings
+/// Screen to display real-time notification feed from server
+/// Fetches notifications from backend API with pull-to-refresh
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -11,14 +16,135 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  // Notification settings
-  bool _pushNotifications = true;
-  bool _routeUpdates = true;
-  bool _fareChanges = true;
-  bool _promotions = false;
-  bool _emailNotifications = false;
-  bool _soundEnabled = true;
-  bool _vibration = true;
+  final TicketNotificationService _notificationService =
+      TicketNotificationService.instance;
+  final AuthService _authService = AuthService();
+
+  List<ServerNotification> _notifications = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+  String? _userEmail;
+  int _unreadCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Get current user's email
+      final user = await _authService.getCachedUser();
+      if (user == null) {
+        setState(() {
+          _errorMessage = 'Please login to view notifications';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      _userEmail = user.email;
+
+      // Initialize notification service
+      await _notificationService.init();
+
+      // Fetch notifications from server
+      final notifications = await _notificationService.fetchNotifications();
+
+      if (mounted) {
+        setState(() {
+          _notifications = notifications;
+          _unreadCount = _notificationService.unreadCount;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading notifications: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load notifications';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _markAllAsRead() async {
+    final success = await _notificationService.markAllAsRead();
+
+    if (success && mounted) {
+      setState(() {
+        _unreadCount = 0;
+      });
+
+      // Refresh to update read status
+      await _loadNotifications();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('All notifications marked as read'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _markAsRead(ServerNotification notification) async {
+    if (notification.isRead) return;
+
+    await _notificationService.markAsRead(notification.id);
+
+    if (mounted) {
+      setState(() {
+        _unreadCount = _notificationService.unreadCount;
+      });
+    }
+  }
+
+  Future<void> _deleteNotification(ServerNotification notification) async {
+    final success = await _notificationService.deleteNotification(
+      notification.id,
+    );
+
+    if (success && mounted) {
+      setState(() {
+        _notifications.removeWhere((n) => n.id == notification.id);
+        _unreadCount = _notificationService.unreadCount;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Notification deleted'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _navigateToTicket(ServerNotification notification) async {
+    if (_userEmail == null) return;
+
+    // Mark as read when tapped
+    await _markAsRead(notification);
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TicketDetailScreen(
+          ticketId: notification.ticketId,
+          userEmail: _userEmail!,
+        ),
+      ),
+    ).then((_) => _loadNotifications());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,198 +164,258 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             color: AppColors.textPrimary,
           ),
         ),
+        actions: [
+          if (_unreadCount > 0)
+            TextButton.icon(
+              onPressed: _markAllAsRead,
+              icon: const Icon(
+                Icons.done_all,
+                color: AppColors.darkBlue,
+                size: 18,
+              ),
+              label: const Text(
+                'Mark all read',
+                style: TextStyle(color: AppColors.darkBlue, fontSize: 12),
+              ),
+            ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.darkBlue),
+            )
+          : _errorMessage != null
+          ? _buildErrorState()
+          : _notifications.isEmpty
+          ? _buildEmptyState()
+          : _buildNotificationsList(),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            _buildSectionHeader('Push Notifications'),
-            const SizedBox(height: 12),
-            _buildSettingsCard([
-              _buildSwitchTile(
-                icon: Icons.notifications_active,
-                title: 'Push Notifications',
-                subtitle: 'Receive push notifications',
-                value: _pushNotifications,
-                onChanged: (value) {
-                  setState(() => _pushNotifications = value);
-                },
+            Icon(Icons.error_outline, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadNotifications,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.darkBlue,
               ),
-              _buildDivider(),
-              _buildSwitchTile(
-                icon: Icons.route,
-                title: 'Route Updates',
-                subtitle: 'Get notified about route changes',
-                value: _routeUpdates,
-                onChanged: _pushNotifications
-                    ? (value) {
-                        setState(() => _routeUpdates = value);
-                      }
-                    : null,
+              child: const Text(
+                'Try Again',
+                style: TextStyle(color: Colors.white),
               ),
-              _buildDivider(),
-              _buildSwitchTile(
-                icon: Icons.attach_money,
-                title: 'Fare Changes',
-                subtitle: 'Notifications about fare updates',
-                value: _fareChanges,
-                onChanged: _pushNotifications
-                    ? (value) {
-                        setState(() => _fareChanges = value);
-                      }
-                    : null,
-              ),
-              _buildDivider(),
-              _buildSwitchTile(
-                icon: Icons.local_offer,
-                title: 'Promotions',
-                subtitle: 'Receive promotional messages',
-                value: _promotions,
-                onChanged: _pushNotifications
-                    ? (value) {
-                        setState(() => _promotions = value);
-                      }
-                    : null,
-              ),
-            ]),
-            const SizedBox(height: 24),
-            _buildSectionHeader('Other Notifications'),
-            const SizedBox(height: 12),
-            _buildSettingsCard([
-              _buildSwitchTile(
-                icon: Icons.email,
-                title: 'Email Notifications',
-                subtitle: 'Receive updates via email',
-                value: _emailNotifications,
-                onChanged: (value) {
-                  setState(() => _emailNotifications = value);
-                },
-              ),
-            ]),
-            const SizedBox(height: 24),
-            _buildSectionHeader('Sound & Vibration'),
-            const SizedBox(height: 12),
-            _buildSettingsCard([
-              _buildSwitchTile(
-                icon: Icons.volume_up,
-                title: 'Sound',
-                subtitle: 'Play sound for notifications',
-                value: _soundEnabled,
-                onChanged: (value) {
-                  setState(() => _soundEnabled = value);
-                },
-              ),
-              _buildDivider(),
-              _buildSwitchTile(
-                icon: Icons.vibration,
-                title: 'Vibration',
-                subtitle: 'Vibrate for notifications',
-                value: _vibration,
-                onChanged: (value) {
-                  setState(() => _vibration = value);
-                },
-              ),
-            ]),
-            const SizedBox(height: 32),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: AppColors.darkBlue,
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.notifications_none,
+              size: 80,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No notifications yet',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'You\'ll see updates about your support tickets here',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSettingsCard(List<Widget> children) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+  Widget _buildNotificationsList() {
+    return RefreshIndicator(
+      onRefresh: _loadNotifications,
+      color: AppColors.darkBlue,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _notifications.length,
+        itemBuilder: (context, index) {
+          final notification = _notifications[index];
+          return _buildNotificationCard(notification);
+        },
       ),
-      child: Column(children: children),
     );
   }
 
-  Widget _buildSwitchTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool>? onChanged,
-  }) {
-    final isEnabled = onChanged != null;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isEnabled
-                  ? AppColors.primary.withValues(alpha: 0.3)
-                  : Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(10),
+  Widget _buildNotificationCard(ServerNotification notification) {
+    return Dismissible(
+      key: Key('notification_${notification.id}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.red.shade400,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      onDismissed: (_) => _deleteNotification(notification),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
             ),
-            child: Icon(
-              icon,
-              color: isEnabled ? AppColors.darkBlue : Colors.grey.shade400,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
+          ],
+          border: notification.isRead
+              ? null
+              : Border.all(
+                  color: notification.iconColor.withValues(alpha: 0.3),
+                  width: 1.5,
+                ),
+        ),
+        child: InkWell(
+          onTap: () => _navigateToTicket(notification),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: isEnabled ? Colors.black87 : Colors.grey.shade500,
+                // Icon with background
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: notification.iconColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    notification.icon,
+                    color: notification.iconColor,
+                    size: 22,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isEnabled
-                        ? Colors.grey.shade600
-                        : Colors.grey.shade400,
+                const SizedBox(width: 12),
+
+                // Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              notification.title,
+                              style: TextStyle(
+                                fontWeight: notification.isRead
+                                    ? FontWeight.w500
+                                    : FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          if (!notification.isRead)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: notification.iconColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        notification.message,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 13,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          if (notification.ticket != null) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'Ticket #${notification.ticketId}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Text(
+                            notification.timeAgo,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
+                ),
+
+                // Arrow
+                Icon(
+                  Icons.chevron_right,
+                  color: Colors.grey.shade400,
+                  size: 20,
                 ),
               ],
             ),
           ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: AppColors.darkBlue,
-          ),
-        ],
+        ),
       ),
     );
-  }
-
-  Widget _buildDivider() {
-    return const Divider(height: 1, indent: 72, endIndent: 16);
   }
 }

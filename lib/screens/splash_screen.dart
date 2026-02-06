@@ -22,8 +22,8 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    // Wait for splash screen to display
-    await Future.delayed(const Duration(seconds: 2));
+    // Minimal delay - just show splash briefly
+    await Future.delayed(const Duration(milliseconds: 800));
 
     if (!mounted) return;
 
