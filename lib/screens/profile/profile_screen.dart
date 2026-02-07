@@ -9,6 +9,7 @@ import '../auth/login_screen.dart';
 import 'recent_activity_screen.dart';
 import 'notifications_screen.dart';
 import 'settings_screen.dart';
+import 'account_settings_screen.dart';
 import 'about_screen.dart';
 import 'report_feedback_screen.dart';
 
@@ -60,13 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // First try cached user
-      final cachedUser = await _authService.getCachedUser();
-      if (cachedUser != null && mounted) {
-        setState(() => _user = cachedUser);
-      }
-
-      // Then verify with server
+      // Verify with server (don't show cached data to prevent flicker)
       final user = await _authService.getCurrentUser();
       if (mounted) {
         setState(() {
@@ -256,6 +251,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       child: Column(
                         children: [
+                          _buildSettingItem(
+                            icon: Icons.manage_accounts_outlined,
+                            title: 'Account Settings',
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const AccountSettingsScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                          _buildDivider(),
                           _buildSettingItem(
                             icon: Icons.history,
                             title: 'Recent Activity',

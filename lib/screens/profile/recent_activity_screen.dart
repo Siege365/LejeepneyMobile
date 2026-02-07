@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../models/recent_activity_model.dart';
 import '../../services/recent_activity_service_v2.dart';
+import '../../services/auth_service.dart';
 
 /// Screen to display user's recent activity
 class RecentActivityScreen extends StatefulWidget {
@@ -13,6 +14,7 @@ class RecentActivityScreen extends StatefulWidget {
 }
 
 class _RecentActivityScreenState extends State<RecentActivityScreen> {
+  final _authService = AuthService();
   List<RecentActivityModel> _activities = [];
   bool _isLoading = true;
 
@@ -24,6 +26,19 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
 
   Future<void> _loadActivities() async {
     setState(() => _isLoading = true);
+
+    // Check if user is authenticated
+    final isLoggedIn = await _authService.isLoggedIn();
+
+    if (!isLoggedIn) {
+      // Clear activities if user is not logged in (guest mode)
+      await RecentActivityServiceV2.clearAll();
+      setState(() {
+        _activities = [];
+        _isLoading = false;
+      });
+      return;
+    }
 
     // Load activities from local database
     final activities = await RecentActivityServiceV2.getActivities();

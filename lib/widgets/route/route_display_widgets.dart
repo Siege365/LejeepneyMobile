@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:latlong2/latlong.dart'; // Provides pi constant
+import 'package:latlong2/latlong.dart' hide Path; // Provides pi constant
 import '../../models/jeepney_route.dart';
 import '../../utils/route_display_helpers.dart';
 import '../../constants/map_constants.dart';
@@ -43,34 +43,53 @@ class RouteDirectionArrows {
   static Marker _buildArrowMarker(ArrowPoint arrowPoint, Color arrowColor) {
     return Marker(
       point: arrowPoint.position,
-      width: 28,
-      height: 28,
+      width: 24,
+      height: 24,
       child: Transform.rotate(
         angle: arrowPoint.bearing * pi / 180,
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.9),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 2,
-                offset: const Offset(0, 1),
-              ),
-            ],
-          ),
-          child: Icon(
-            Icons.arrow_forward,
-            color: arrowColor,
-            size: 18,
-            shadows: [
-              Shadow(color: Colors.white.withValues(alpha: 0.8), blurRadius: 2),
-            ],
-          ),
+        child: CustomPaint(
+          size: const Size(24, 24),
+          painter: _DirectionArrowPainter(color: arrowColor),
         ),
       ),
     );
   }
+}
+
+/// Custom painter for a directional triangle arrow without circle background
+class _DirectionArrowPainter extends CustomPainter {
+  final Color color;
+
+  _DirectionArrowPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final outlinePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.9)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeJoin = StrokeJoin.round;
+
+    // Triangle pointing right (→), rotated by Transform.rotate for bearing
+    final path = Path()
+      ..moveTo(size.width * 0.85, size.height * 0.5) // tip (right)
+      ..lineTo(size.width * 0.15, size.height * 0.15) // top-left
+      ..lineTo(size.width * 0.30, size.height * 0.5) // center indent
+      ..lineTo(size.width * 0.15, size.height * 0.85) // bottom-left
+      ..close();
+
+    // Draw white outline first for visibility on any background
+    canvas.drawPath(path, outlinePaint);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DirectionArrowPainter oldDelegate) =>
+      color != oldDelegate.color;
 }
 
 /// Builds start and end markers for a route

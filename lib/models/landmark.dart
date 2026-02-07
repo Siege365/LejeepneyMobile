@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show debugPrint;
+
 class Landmark {
   final int id;
   final String name;
@@ -39,7 +41,15 @@ class Landmark {
           0.0,
       iconUrl: json['icon_url'],
       galleryUrls: json['gallery_urls'] != null
-          ? List<String>.from(json['gallery_urls'])
+          ? (json['gallery_urls'] as List).map<String>((url) {
+              final urlStr = url.toString();
+              // If URL is relative (no http/https), prepend base URL
+              if (urlStr.startsWith('http://') ||
+                  urlStr.startsWith('https://')) {
+                return urlStr;
+              }
+              return 'http://heterochromous-lilli-luetically.ngrok-free.dev/storage/$urlStr';
+            }).toList()
           : [],
       isFeatured: json['is_featured'] ?? false,
       distance: _parseDouble(json['distance']),

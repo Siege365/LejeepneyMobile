@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_colors.dart';
+import '../../widgets/common/tutorial_overlay.dart';
 
 /// Screen for general app settings - Industry standard layout
 class SettingsScreen extends StatefulWidget {
@@ -284,6 +285,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: 'Free up storage space',
                 onTap: _showClearCacheDialog,
               ),
+              const Divider(height: 1),
+              _buildActionTile(
+                icon: Icons.play_circle_outline,
+                title: 'Replay Tutorial',
+                subtitle: 'Watch the app introduction again',
+                onTap: _replayTutorial,
+              ),
             ]),
             const SizedBox(height: 32),
           ],
@@ -518,7 +526,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Text('Cache cleared successfully'),
                     ],
                   ),
-                  backgroundColor: Color(0xFF10B981),
+                  backgroundColor: AppColors.success,
                 ),
               );
             },
@@ -526,6 +534,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Clear'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _replayTutorial() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (_, __, ___) =>
+            TutorialOverlay(onComplete: () => Navigator.of(context).pop()),
       ),
     );
   }

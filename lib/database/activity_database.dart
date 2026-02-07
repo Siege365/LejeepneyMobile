@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:flutter/foundation.dart';
 import '../models/recent_activity_model.dart';
 
 /// SQLite database helper for local activity storage
@@ -163,7 +164,9 @@ class ActivityDatabase {
   /// Clear all activities
   static Future<int> clearAll() async {
     final db = await database;
-    return await db.delete(_tableName);
+    final count = await db.delete(_tableName);
+    debugPrint('[ActivityDatabase] Cleared $count activities from database');
+    return count;
   }
 
   /// Merge server activities with local (for pull sync)

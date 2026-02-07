@@ -202,6 +202,19 @@ class JeepneyPathfinder {
           if (processedRouteIds.contains(originAccess.route.id)) {
             continue;
           }
+
+          // Direction check: passenger must board BEFORE alighting on the path
+          if (!GeoUtils.isForwardTravel(
+            originAccess.pointIndex,
+            destAccess.pointIndex,
+          )) {
+            debugPrint(
+              '[Pathfinder] Skipping ${originAccess.route.routeNumber}: '
+              'wrong direction (board@${originAccess.pointIndex} → alight@${destAccess.pointIndex})',
+            );
+            continue;
+          }
+
           processedRouteIds.add(originAccess.route.id);
 
           final route = originAccess.route;
@@ -342,6 +355,29 @@ class JeepneyPathfinder {
           continue;
         }
 
+        // Direction check: both legs must travel forward on their respective routes
+        final transferIndexOnOriginRoute = intersection.getPointIndexForRoute(
+          originRoute.id,
+        );
+        final transferIndexOnConnectingRoute = intersection
+            .getPointIndexForRoute(connectingRoute.id);
+
+        // Leg 1: board origin route → ride forward → alight at transfer
+        if (!GeoUtils.isForwardTravel(
+          originAccess.pointIndex,
+          transferIndexOnOriginRoute,
+        )) {
+          continue; // Would require traveling backwards on origin route
+        }
+
+        // Leg 2: board connecting route at transfer → ride forward → alight at dest
+        if (!GeoUtils.isForwardTravel(
+          transferIndexOnConnectingRoute,
+          destAccess.pointIndex,
+        )) {
+          continue; // Would require traveling backwards on connecting route
+        }
+
         // Avoid duplicate pairs
         final pairKey = '${originRoute.id}_${connectingRoute.id}';
         if (processedPairs.contains(pairKey)) continue;
@@ -389,6 +425,17 @@ class JeepneyPathfinder {
             ? intersection1.route2
             : intersection1.route1;
 
+        // Direction check – Leg 1 (route1): origin → intersection1 (forward)
+        final transfer1IndexOnRoute1 = intersection1.getPointIndexForRoute(
+          route1.id,
+        );
+        if (!GeoUtils.isForwardTravel(
+          originAccess.pointIndex,
+          transfer1IndexOnRoute1,
+        )) {
+          continue;
+        }
+
         // Find what route2 connects to
         final route2Intersections = _graph.findRouteIntersections(route2);
 
@@ -399,6 +446,20 @@ class JeepneyPathfinder {
 
           // Skip if route3 is same as route1
           if (route3.id == route1.id) continue;
+
+          // Direction check – Leg 2 (route2): intersection1 → intersection2 (forward)
+          final transfer1IndexOnRoute2 = intersection1.getPointIndexForRoute(
+            route2.id,
+          );
+          final transfer2IndexOnRoute2 = intersection2.getPointIndexForRoute(
+            route2.id,
+          );
+          if (!GeoUtils.isForwardTravel(
+            transfer1IndexOnRoute2,
+            transfer2IndexOnRoute2,
+          )) {
+            continue;
+          }
 
           // Check if route3 can reach destination
           final destAccess = destRoutes.firstWhere(
@@ -413,6 +474,17 @@ class JeepneyPathfinder {
 
           if (destAccess.walkingDistanceMeters >
               config.maxAccessWalkingMeters) {
+            continue;
+          }
+
+          // Direction check – Leg 3 (route3): intersection2 → destination (forward)
+          final transfer2IndexOnRoute3 = intersection2.getPointIndexForRoute(
+            route3.id,
+          );
+          if (!GeoUtils.isForwardTravel(
+            transfer2IndexOnRoute3,
+            destAccess.pointIndex,
+          )) {
             continue;
           }
 

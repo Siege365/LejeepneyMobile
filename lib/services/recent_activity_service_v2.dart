@@ -118,6 +118,60 @@ class RecentActivityServiceV2 {
     );
   }
 
+  /// Add a ticket created activity
+  static Future<void> addTicketCreated({
+    required int ticketId,
+    required String subject,
+    String? ticketType,
+  }) async {
+    await _syncManager.track(
+      activityType: 'ticket_created',
+      title: 'Support Ticket Created',
+      subtitle: 'Ticket #$ticketId - $subject',
+      metadata: {'ticketId': ticketId, 'subject': subject, 'type': ticketType},
+    );
+  }
+
+  /// Add a ticket replied activity
+  static Future<void> addTicketReplied({
+    required int ticketId,
+    required String subject,
+    required bool isUserReply,
+  }) async {
+    final subtitle = isUserReply
+        ? 'You replied to Ticket #$ticketId'
+        : 'Admin replied to Ticket #$ticketId';
+
+    await _syncManager.track(
+      activityType: 'ticket_replied',
+      title: 'Ticket Conversation',
+      subtitle: subtitle,
+      metadata: {
+        'ticketId': ticketId,
+        'subject': subject,
+        'isUserReply': isUserReply,
+      },
+    );
+  }
+
+  /// Add a ticket status changed activity
+  static Future<void> addTicketStatusChanged({
+    required int ticketId,
+    required String subject,
+    required String newStatus,
+  }) async {
+    await _syncManager.track(
+      activityType: 'ticket_status_changed',
+      title: 'Ticket Status Updated',
+      subtitle: 'Ticket #$ticketId status: $newStatus',
+      metadata: {
+        'ticketId': ticketId,
+        'subject': subject,
+        'newStatus': newStatus,
+      },
+    );
+  }
+
   /// Get all activities from local database
   static Future<List<RecentActivityModel>> getActivities({
     int? limit,

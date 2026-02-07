@@ -216,7 +216,27 @@ class GeoUtils {
     return closestIndex;
   }
 
-  /// Extract a sub-path between two points (finds closest path points)
+  /// Check if traveling from fromIndex to toIndex follows the forward
+  /// direction of the route path. Returns true when toIndex >= fromIndex.
+  static bool isForwardTravel(int fromIndex, int toIndex) {
+    return toIndex >= fromIndex;
+  }
+
+  /// Get the bearing (travel direction in degrees) of a route at a given path
+  /// index. Uses the segment starting at [index] (or ending at [index] if it
+  /// is the last point).
+  static double getBearingAtIndex(List<LatLng> path, int index) {
+    if (path.length < 2) return 0.0;
+    if (index >= path.length - 1) {
+      // Last point – use the bearing of the final segment
+      return calculateBearing(path[path.length - 2], path[path.length - 1]);
+    }
+    return calculateBearing(path[index], path[index + 1]);
+  }
+
+  /// Extract a sub-path between two points **only in forward direction**.
+  /// Returns an empty list when the start comes after the end on the path
+  /// (i.e. would require traveling backwards).
   static List<LatLng> extractSubPath(
     List<LatLng> fullPath,
     LatLng start,
@@ -229,13 +249,12 @@ class GeoUtils {
 
     if (startIndex == -1 || endIndex == -1) return [];
 
-    // Handle both directions along the path
-    if (startIndex <= endIndex) {
-      return fullPath.sublist(startIndex, endIndex + 1);
-    } else {
-      // Path goes in reverse direction
-      return fullPath.sublist(endIndex, startIndex + 1).reversed.toList();
+    // Only allow forward travel along the route
+    if (startIndex > endIndex) {
+      return []; // Reverse direction – not a valid sub-path
     }
+
+    return fullPath.sublist(startIndex, endIndex + 1);
   }
 
   /// Calculate bearing from one point to another (in degrees)

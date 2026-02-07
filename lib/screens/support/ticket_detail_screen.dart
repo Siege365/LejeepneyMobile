@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/support_ticket.dart';
+import '../../constants/app_colors.dart';
 import '../../services/support_service.dart';
-import '../../services/recent_activity_service.dart';
+import '../../services/recent_activity_service_v2.dart';
 
 /// Screen to display ticket details and real-time conversation chat
 /// Supports auto-refresh polling for new admin messages
@@ -72,7 +73,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
   void _startPolling() {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(_pollingInterval, (_) {
-      if (mounted && _ticket?.status != TicketStatus.resolved) {
+      if (mounted && !(_ticket?.status.isClosed ?? false)) {
         _checkForNewMessages();
       }
     });
@@ -108,8 +109,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
       } else if (result.ticket!.status != _ticket!.status) {
         // Backend automatically creates notification for status changes
         // Record in recent activity
-        await RecentActivityService.addTicketStatusChanged(
-          userId: widget.userEmail,
+        await RecentActivityServiceV2.addTicketStatusChanged(
           ticketId: widget.ticketId,
           subject: result.ticket!.subject,
           newStatus: result.ticket!.status.displayName,
@@ -134,9 +134,14 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
             Text('New message from support'),
           ],
         ),
-        backgroundColor: const Color(0xFF10B981),
+        backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
+        margin: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top + 16,
+          left: 16,
+          right: 16,
+          bottom: MediaQuery.of(context).size.height - 100,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 3),
       ),
@@ -156,7 +161,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
         ),
         backgroundColor: newStatus.color,
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
+        margin: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top + 16,
+          left: 16,
+          right: 16,
+          bottom: MediaQuery.of(context).size.height - 100,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 3),
       ),
@@ -259,8 +269,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
 
       if (result.success) {
         // Record in recent activity
-        await RecentActivityService.addTicketReplied(
-          userId: widget.userEmail,
+        await RecentActivityServiceV2.addTicketReplied(
           ticketId: widget.ticketId,
           subject: _ticket!.subject,
           isUserReply: true,
@@ -289,6 +298,72 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
     }
   }
 
+  /// Show confirmation dialog and cancel the ticket
+  Future<void> _confirmCancelTicket() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.cancel_outlined, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Text(
+              'Cancel Ticket',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to cancel this ticket? This action cannot be undone.',
+          style: TextStyle(fontSize: 14, color: Colors.black87),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No, Keep It'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isLoading = true);
+
+    final result = await _supportService.cancelTicket(
+      ticketId: widget.ticketId,
+      email: widget.userEmail,
+    );
+
+    if (mounted) {
+      if (result.success) {
+        // Record in recent activity
+        await RecentActivityServiceV2.addTicketStatusChanged(
+          ticketId: widget.ticketId,
+          subject: _ticket!.subject,
+          newStatus: 'Cancelled',
+        );
+        _showSuccessSnackbar('Ticket cancelled successfully');
+        _loadTicketDetails();
+      } else {
+        setState(() => _isLoading = false);
+        _showErrorSnackbar(result.errorMessage ?? 'Failed to cancel ticket');
+      }
+    }
+  }
+
   void _showValidationError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -311,7 +386,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
             Text(message),
           ],
         ),
-        backgroundColor: const Color(0xFF10B981),
+        backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -373,29 +448,40 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
           ],
         ),
         actions: [
-          if (_ticket?.status == TicketStatus.resolved)
+          if (_ticket?.status.isClosed ?? false)
             Container(
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                color: _ticket!.status.color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle, color: Color(0xFF10B981), size: 14),
-                  SizedBox(width: 4),
+                  Icon(
+                    _ticket!.status.icon,
+                    color: _ticket!.status.color,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 4),
                   Text(
-                    'Resolved',
+                    _ticket!.status.displayName,
                     style: TextStyle(
-                      color: Color(0xFF10B981),
+                      color: _ticket!.status.color,
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
               ),
+            ),
+          // Cancel button – only for open tickets
+          if (_ticket != null && !(_ticket!.status.isClosed))
+            IconButton(
+              icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+              tooltip: 'Cancel Ticket',
+              onPressed: _confirmCancelTicket,
             ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.black),
@@ -405,7 +491,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF4A90A4)),
+              child: CircularProgressIndicator(color: AppColors.teal),
             )
           : _errorMessage != null
           ? _buildErrorState()
@@ -430,9 +516,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadTicketDetails,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4A90A4),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.teal),
               child: const Text(
                 'Try Again',
                 style: TextStyle(color: Colors.white),
@@ -452,7 +536,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
         Expanded(
           child: RefreshIndicator(
             onRefresh: _loadTicketDetails,
-            color: const Color(0xFF4A90A4),
+            color: AppColors.teal,
             child: SingleChildScrollView(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
@@ -468,24 +552,19 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
                   _buildConversationHeader(),
                   const SizedBox(height: 12),
 
-                  // Original message
-                  _buildOriginalMessage(),
-                  const SizedBox(height: 8),
-
-                  // Conversation thread
-                  ..._ticket!.replies.map(_buildReplyBubble),
-
-                  // Empty state if no replies
-                  if (_ticket!.replies.isEmpty) _buildEmptyRepliesState(),
+                  // All messages as separate bubbles (original + follow-ups + replies)
+                  ..._buildConversationThread(),
                 ],
               ),
             ),
           ),
         ),
 
-        // Reply input (only show if ticket is not resolved)
-        if (_ticket!.status != TicketStatus.resolved)
+        // Reply input (only show if ticket is open)
+        if (!_ticket!.status.isClosed)
           _buildReplyInput()
+        else if (_ticket!.status == TicketStatus.cancelled)
+          _buildCancelledBanner()
         else
           _buildResolvedBanner(),
       ],
@@ -561,7 +640,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
           width: 4,
           height: 20,
           decoration: BoxDecoration(
-            color: const Color(0xFF4A90A4),
+            color: AppColors.teal,
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -575,13 +654,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.1),
+              color: AppColors.success.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Text(
+            child: Text(
               'New',
               style: TextStyle(
-                color: Color(0xFF10B981),
+                color: AppColors.success,
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
               ),
@@ -591,43 +670,97 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
     );
   }
 
-  Widget _buildOriginalMessage() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF4A90A4).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF4A90A4).withValues(alpha: 0.3),
-        ),
+  /// Parse the combined message field into original + follow-ups,
+  /// then interleave with admin replies sorted by time.
+  /// Build the conversation thread: original message + all replies sorted by time.
+  /// Backend now returns follow-ups as separate TicketReply records with sender_type.
+  List<Widget> _buildConversationThread() {
+    final widgets = <Widget>[];
+
+    // Original message (always first, from the user)
+    widgets.add(
+      _buildUserMessageBubble(
+        _ticket!.message.trim(),
+        _ticket!.createdAt,
+        isPending: false,
       ),
-      child: Column(
+    );
+    widgets.add(const SizedBox(height: 8));
+
+    // All replies (already sorted by created_at from backend)
+    if (_ticket!.replies.isEmpty) {
+      widgets.add(_buildEmptyRepliesState());
+    } else {
+      for (final reply in _ticket!.replies) {
+        widgets.add(_buildReplyBubble(reply));
+        widgets.add(const SizedBox(height: 8));
+      }
+    }
+
+    return widgets;
+  }
+
+  /// Build a user message bubble (for original + follow-up messages)
+  Widget _buildUserMessageBubble(
+    String message,
+    DateTime timestamp, {
+    bool isPending = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                radius: 16,
-                backgroundColor: Color(0xFF4A90A4),
-                child: Icon(Icons.person, color: Colors.white, size: 18),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isPending
+                    ? AppColors.teal.withValues(alpha: 0.7)
+                    : AppColors.teal,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  topRight: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                  bottomRight: Radius.circular(4),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              const Text(
-                'You',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.4,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _formatTime(timestamp),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
               ),
-              const Spacer(),
-              Text(
-                _formatTime(_ticket!.createdAt),
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            _ticket!.message,
-            style: const TextStyle(fontSize: 14, height: 1.5),
+          const SizedBox(width: 8),
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: AppColors.teal.withValues(alpha: 0.2),
+            child: const Icon(Icons.person, color: AppColors.teal, size: 18),
           ),
         ],
       ),
@@ -685,10 +818,14 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUserReply) ...[
-            const CircleAvatar(
+            CircleAvatar(
               radius: 16,
-              backgroundColor: Color(0xFF10B981),
-              child: Icon(Icons.support_agent, color: Colors.white, size: 18),
+              backgroundColor: AppColors.success,
+              child: const Icon(
+                Icons.support_agent,
+                color: Colors.white,
+                size: 18,
+              ),
             ),
             const SizedBox(width: 8),
           ],
@@ -698,8 +835,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
               decoration: BoxDecoration(
                 color: isUserReply
                     ? (isPending
-                          ? const Color(0xFF4A90A4).withValues(alpha: 0.7)
-                          : const Color(0xFF4A90A4))
+                          ? AppColors.teal.withValues(alpha: 0.7)
+                          : AppColors.teal)
                     : Colors.white,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(12),
@@ -718,11 +855,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (!isUserReply && reply.adminName != null)
+                  if (!isUserReply &&
+                      (reply.senderName ?? reply.adminName) != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        reply.adminName!,
+                        reply.senderName ?? reply.adminName ?? 'Support',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 12,
@@ -772,12 +910,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
             const SizedBox(width: 8),
             CircleAvatar(
               radius: 16,
-              backgroundColor: const Color(0xFF4A90A4).withValues(alpha: 0.2),
-              child: const Icon(
-                Icons.person,
-                color: Color(0xFF4A90A4),
-                size: 18,
-              ),
+              backgroundColor: AppColors.teal.withValues(alpha: 0.2),
+              child: const Icon(Icons.person, color: AppColors.teal, size: 18),
             ),
           ],
         ],
@@ -826,10 +960,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
-                  borderSide: const BorderSide(
-                    color: Color(0xFF4A90A4),
-                    width: 2,
-                  ),
+                  borderSide: const BorderSide(color: AppColors.teal, width: 2),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -842,7 +973,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
           const SizedBox(width: 12),
           Container(
             decoration: BoxDecoration(
-              color: _isSending ? Colors.grey : const Color(0xFF4A90A4),
+              color: _isSending ? Colors.grey : AppColors.teal,
               shape: BoxShape.circle,
             ),
             child: IconButton(
@@ -874,22 +1005,54 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
         bottom: MediaQuery.of(context).padding.bottom + 16,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFF10B981).withValues(alpha: 0.1),
+        color: AppColors.success.withValues(alpha: 0.1),
+        border: Border(
+          top: BorderSide(color: AppColors.success.withValues(alpha: 0.3)),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.check_circle, color: AppColors.success, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            'This ticket has been resolved',
+            style: TextStyle(
+              color: AppColors.success,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCancelledBanner() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).padding.bottom + 16,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEF4444).withValues(alpha: 0.1),
         border: Border(
           top: BorderSide(
-            color: const Color(0xFF10B981).withValues(alpha: 0.3),
+            color: const Color(0xFFEF4444).withValues(alpha: 0.3),
           ),
         ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 20),
+          const Icon(Icons.cancel, color: Color(0xFFEF4444), size: 20),
           const SizedBox(width: 8),
           const Text(
-            'This ticket has been resolved',
+            'This ticket has been cancelled',
             style: TextStyle(
-              color: Color(0xFF10B981),
+              color: Color(0xFFEF4444),
               fontWeight: FontWeight.w600,
             ),
           ),

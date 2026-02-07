@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
+import '../constants/app_colors.dart';
 
 /// Enum for ticket types
 enum TicketType {
@@ -6,7 +8,12 @@ enum TicketType {
   technical('technical'),
   billing('billing'),
   feedback('feedback'),
-  bug('bug');
+  other('other'),
+  complaint('complaint'),
+  bug('bug'),
+  inquiry('inquiry'),
+  suggestion('suggestion'),
+  report('report');
 
   final String value;
   const TicketType(this.value);
@@ -28,8 +35,18 @@ enum TicketType {
         return 'Billing';
       case TicketType.feedback:
         return 'Feedback';
+      case TicketType.other:
+        return 'Other';
+      case TicketType.complaint:
+        return 'Complaint';
       case TicketType.bug:
         return 'Bug Report';
+      case TicketType.inquiry:
+        return 'Inquiry';
+      case TicketType.suggestion:
+        return 'Suggestion';
+      case TicketType.report:
+        return 'Report Issue';
     }
   }
 }
@@ -77,14 +94,20 @@ enum TicketPriority {
 enum TicketStatus {
   pending('pending'),
   inProgress('in_progress'),
-  resolved('resolved');
+  resolved('resolved'),
+  cancelled('cancelled');
 
   final String value;
   const TicketStatus(this.value);
 
   static TicketStatus fromString(String value) {
+    // Normalize: replace spaces and hyphens with underscores
+    final normalizedValue = value
+        .toLowerCase()
+        .replaceAll(' ', '_')
+        .replaceAll('-', '_');
     return TicketStatus.values.firstWhere(
-      (status) => status.value == value,
+      (status) => status.value == normalizedValue,
       orElse: () => TicketStatus.pending,
     );
   }
@@ -97,8 +120,14 @@ enum TicketStatus {
         return 'In Progress';
       case TicketStatus.resolved:
         return 'Resolved';
+      case TicketStatus.cancelled:
+        return 'Cancelled';
     }
   }
+
+  /// Whether the ticket is in a terminal (closed) state
+  bool get isClosed =>
+      this == TicketStatus.resolved || this == TicketStatus.cancelled;
 
   /// Badge colors as per specification
   Color get color {
@@ -108,7 +137,9 @@ enum TicketStatus {
       case TicketStatus.inProgress:
         return const Color(0xFF3B82F6); // #3B82F6 - Blue
       case TicketStatus.resolved:
-        return const Color(0xFF10B981); // #10B981 - Green
+        return AppColors.success; // #10B981 - Green
+      case TicketStatus.cancelled:
+        return const Color(0xFFEF4444); // #EF4444 - Red
     }
   }
 
@@ -120,6 +151,8 @@ enum TicketStatus {
         return const Color(0xFFDBEAFE); // Light blue
       case TicketStatus.resolved:
         return const Color(0xFFD1FAE5); // Light green
+      case TicketStatus.cancelled:
+        return const Color(0xFFFEE2E2); // Light red
     }
   }
 
@@ -131,6 +164,8 @@ enum TicketStatus {
         return Icons.autorenew;
       case TicketStatus.resolved:
         return Icons.check_circle;
+      case TicketStatus.cancelled:
+        return Icons.cancel;
     }
   }
 }
@@ -156,10 +191,13 @@ class SupportTicket {
   });
 
   factory SupportTicket.fromJson(Map<String, dynamic> json) {
+    final statusValue = json['status'] as String;
+    debugPrint('[SupportTicket] Parsing status: "$statusValue"');
+
     return SupportTicket(
       id: json['id'] as int,
       subject: json['subject'] as String,
-      status: TicketStatus.fromString(json['status'] as String),
+      status: TicketStatus.fromString(statusValue),
       type: TicketType.fromString(json['type'] as String? ?? 'general'),
       priority: TicketPriority.fromString(
         json['priority'] as String? ?? 'medium',
@@ -189,6 +227,8 @@ class TicketReply {
   final int id;
   final String message;
   final String? adminName;
+  final String? senderName;
+  final String senderType; // 'admin' or 'customer'
   final bool isUserReply;
   final DateTime createdAt;
 
@@ -196,16 +236,24 @@ class TicketReply {
     required this.id,
     required this.message,
     this.adminName,
+    this.senderName,
+    this.senderType = 'customer',
     this.isUserReply = false,
     required this.createdAt,
   });
 
   factory TicketReply.fromJson(Map<String, dynamic> json) {
+    final senderType = json['sender_type'] as String? ?? 'admin';
+    final isUser =
+        senderType == 'customer' || (json['is_user_reply'] as bool? ?? false);
     return TicketReply(
       id: json['id'] as int,
       message: json['message'] as String,
-      adminName: json['admin_name'] as String?,
-      isUserReply: json['is_user_reply'] as bool? ?? false,
+      adminName:
+          json['admin_name'] as String? ?? json['sender_name'] as String?,
+      senderName: json['sender_name'] as String?,
+      senderType: senderType,
+      isUserReply: isUser,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
@@ -215,6 +263,8 @@ class TicketReply {
       'id': id,
       'message': message,
       'admin_name': adminName,
+      'sender_name': senderName,
+      'sender_type': senderType,
       'is_user_reply': isUserReply,
       'created_at': createdAt.toIso8601String(),
     };

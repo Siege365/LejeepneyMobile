@@ -190,7 +190,7 @@ class _MainNavigationState extends State<MainNavigation> {
             ],
           ),
           child: const Icon(
-            Icons.directions_bus,
+            Icons.calculate_outlined,
             color: AppColors.white,
             size: 28,
           ),

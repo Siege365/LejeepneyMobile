@@ -190,6 +190,10 @@ class TransitGraph {
       (bestPoint1.longitude + bestPoint2.longitude) / 2,
     );
 
+    // Store the path index for each route at the intersection
+    final idx1 = GeoUtils.findClosestPointIndex(bestPoint1, route1.path);
+    final idx2 = GeoUtils.findClosestPointIndex(bestPoint2, route2.path);
+
     return RouteIntersection(
       route1: route1,
       route2: route2,
@@ -197,6 +201,8 @@ class TransitGraph {
       point1OnRoute: bestPoint1,
       point2OnRoute: bestPoint2,
       distanceMeters: minDistance,
+      point1Index: idx1,
+      point2Index: idx2,
     );
   }
 
@@ -266,19 +272,8 @@ class TransitGraph {
         _edges.add(edge);
         _addToAdjacencyList(from.id, edge);
 
-        // Add reverse edge (jeepneys can go both ways conceptually for transfer graph)
-        final reverseEdge = TransitEdge(
-          id: '${edgeId}_rev',
-          from: to,
-          to: from,
-          type: TransitEdgeType.jeepneyRide,
-          route: route,
-          distanceKm: distance,
-          estimatedTimeMinutes: time,
-          fare: route.baseFare,
-        );
-        _edges.add(reverseEdge);
-        _addToAdjacencyList(to.id, reverseEdge);
+        // Direction-aware: NO reverse edges – jeepney routes are one-way
+        // Passengers must board and alight in the forward travel direction
       }
     }
 
@@ -411,6 +406,12 @@ class RouteIntersection {
   final LatLng point2OnRoute;
   final double distanceMeters;
 
+  /// Index along route1.path where this intersection occurs
+  final int point1Index;
+
+  /// Index along route2.path where this intersection occurs
+  final int point2Index;
+
   RouteIntersection({
     required this.route1,
     required this.route2,
@@ -418,11 +419,21 @@ class RouteIntersection {
     required this.point1OnRoute,
     required this.point2OnRoute,
     required this.distanceMeters,
+    required this.point1Index,
+    required this.point2Index,
   });
+
+  /// Get the path index for a specific route at this intersection.
+  /// Returns -1 if the route is not part of this intersection.
+  int getPointIndexForRoute(int routeId) {
+    if (route1.id == routeId) return point1Index;
+    if (route2.id == routeId) return point2Index;
+    return -1;
+  }
 
   @override
   String toString() =>
-      'RouteIntersection(${route1.routeNumber} <-> ${route2.routeNumber}, ${distanceMeters.toStringAsFixed(0)}m)';
+      'RouteIntersection(${route1.routeNumber} @$point1Index <-> ${route2.routeNumber} @$point2Index, ${distanceMeters.toStringAsFixed(0)}m)';
 }
 
 /// Represents access to a route from a point

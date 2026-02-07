@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../utils/security_utils.dart';
+import 'recent_activity_service_v2.dart';
 
 class AuthException implements Exception {
   final String message;
@@ -313,6 +314,10 @@ class AuthService {
       // Even if server logout fails, clear local data
       SecurityUtils.debugLog('Logout API call failed');
     } finally {
+      // Clear recent activities before clearing auth
+      SecurityUtils.debugLog('Clearing recent activities...');
+      final cleared = await RecentActivityServiceV2.clearAll();
+      SecurityUtils.debugLog('Activities cleared: $cleared');
       // Always clear local auth data
       await _clearAuth();
     }
@@ -454,4 +459,142 @@ class AuthService {
   /// Check if currently locked out
   bool get isLockedOut =>
       _lockoutUntil != null && DateTime.now().isBefore(_lockoutUntil!);
+
+  // ========== UPDATE PROFILE ==========
+  Future<UserModel> updateProfile({required String name, String? phone}) async {
+    final sanitizedName = SecurityUtils.sanitizeName(name);
+    final sanitizedPhone = phone != null
+        ? SecurityUtils.sanitizePhone(phone)
+        : null;
+
+    if (!SecurityUtils.isValidName(sanitizedName)) {
+      throw AuthException('Invalid name format');
+    }
+    if (sanitizedPhone != null &&
+        sanitizedPhone.isNotEmpty &&
+        !SecurityUtils.isValidPhone(sanitizedPhone)) {
+      throw AuthException('Invalid phone number format');
+    }
+
+    try {
+      final token = await getToken();
+      if (token == null) throw AuthException('Not authenticated');
+
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl/user/profile'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: jsonEncode({
+              'name': sanitizedName,
+              if (sanitizedPhone != null) 'phone': sanitizedPhone,
+            }),
+          )
+          .timeout(_timeout);
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        final user = UserModel.fromJson(data['user']);
+        await _saveUser(data['user']);
+        return user;
+      } else {
+        throw AuthException(data['message'] ?? 'Failed to update profile');
+      }
+    } on SocketException {
+      throw AuthException('No internet connection');
+    } catch (e) {
+      if (e is AuthException) rethrow;
+      throw AuthException('Failed to update profile. Please try again.');
+    }
+  }
+
+  // ========== CHANGE PASSWORD ==========
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) async {
+    final passwordError = SecurityUtils.validatePasswordSimple(newPassword);
+    if (passwordError != null) {
+      throw AuthException(passwordError);
+    }
+    if (newPassword != newPasswordConfirmation) {
+      throw AuthException('New passwords do not match');
+    }
+
+    try {
+      final token = await getToken();
+      if (token == null) throw AuthException('Not authenticated');
+
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl/user/password'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: jsonEncode({
+              'current_password': currentPassword,
+              'password': newPassword,
+              'password_confirmation': newPasswordConfirmation,
+            }),
+          )
+          .timeout(_timeout);
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return;
+      } else {
+        throw AuthException(data['message'] ?? 'Failed to change password');
+      }
+    } on SocketException {
+      throw AuthException('No internet connection');
+    } catch (e) {
+      if (e is AuthException) rethrow;
+      throw AuthException('Failed to change password. Please try again.');
+    }
+  }
+
+  // ========== DELETE ACCOUNT ==========
+  Future<void> deleteAccount({required String password}) async {
+    try {
+      final token = await getToken();
+      if (token == null) throw AuthException('Not authenticated');
+
+      final response = await http
+          .delete(
+            Uri.parse('$baseUrl/user/account'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: jsonEncode({'password': password}),
+          )
+          .timeout(_timeout);
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        await _clearAuth();
+        return;
+      } else {
+        throw AuthException(data['message'] ?? 'Failed to delete account');
+      }
+    } on SocketException {
+      throw AuthException('No internet connection');
+    } catch (e) {
+      if (e is AuthException) rethrow;
+      throw AuthException('Failed to delete account. Please try again.');
+    }
+  }
 }

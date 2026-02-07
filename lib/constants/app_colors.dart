@@ -25,10 +25,13 @@ class AppColors {
   static const Color backgroundDark = Color(0xFF121212);
 
   // Status colors
-  static const Color success = Color(0xFF4CAF50);
+  static const Color success = Color(0xFF10B981);
   static const Color error = Color(0xFFB00020);
   static const Color warning = Color(0xFFFFA000);
   static const Color info = Color(0xFF2196F3);
+
+  // Accent colors
+  static const Color teal = Color(0xFF4A90A4); // Support & secondary accent
 
   // Gradients
   static const LinearGradient blueGradient = LinearGradient(

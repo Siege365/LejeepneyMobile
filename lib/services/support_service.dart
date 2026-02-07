@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart' show IconData, Icons, Color;
 import 'package:http/http.dart' as http;
 import 'api_service.dart';
+import '../constants/app_colors.dart';
 import '../models/support_ticket.dart';
 
 /// Service for Customer Support API integration
@@ -25,6 +26,9 @@ class SupportService {
   }) async {
     final url = '${ApiService.baseUrl}/support/tickets';
     debugPrint('[SupportService] Creating ticket: $subject');
+    debugPrint(
+      '[SupportService] Type: ${type.value}, Priority: ${priority.value}',
+    );
 
     try {
       final response = await http
@@ -59,11 +63,18 @@ class SupportService {
           message: data['message'] as String,
         );
       } else if (response.statusCode == 422) {
-        // Validation error
+        // Validation error - Laravel returns errors as {field: [messages]}
         final errors = data['errors'] as Map<String, dynamic>?;
-        final errorMessage = errors != null
-            ? errors.values.first.toString()
-            : data['message'] ?? 'Validation failed';
+        String errorMessage;
+        if (errors != null && errors.isNotEmpty) {
+          final firstError = errors.values.first;
+          errorMessage = firstError is List
+              ? firstError.first.toString()
+              : firstError.toString();
+        } else {
+          errorMessage = data['message'] ?? 'Validation failed';
+        }
+        debugPrint('[SupportService] Validation error: $errorMessage');
         return CreateTicketResult(success: false, errorMessage: errorMessage);
       } else {
         return CreateTicketResult(
@@ -294,6 +305,61 @@ class SupportService {
     } catch (e) {
       debugPrint('[SupportService] Error adding follow-up: $e');
       return FollowUpResult(
+        success: false,
+        errorMessage: 'An unexpected error occurred',
+      );
+    }
+  }
+
+  // ============================================================
+  // TICKET CANCEL METHOD
+  // ============================================================
+
+  /// Cancel a support ticket
+  /// PUT /api/v1/support/tickets/{id}/cancel?email=user@example.com
+  Future<SimpleResult> cancelTicket({
+    required int ticketId,
+    required String email,
+  }) async {
+    final url = '${ApiService.baseUrl}/support/tickets/$ticketId/cancel';
+    debugPrint('[SupportService] Cancelling ticket: $ticketId');
+
+    try {
+      final response = await http
+          .put(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({'email': email}),
+          )
+          .timeout(_timeout);
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        debugPrint('[SupportService] Ticket $ticketId cancelled');
+        return SimpleResult(
+          success: true,
+          message: data['message'] ?? 'Ticket cancelled',
+        );
+      } else {
+        return SimpleResult(
+          success: false,
+          errorMessage: data['message'] ?? 'Failed to cancel ticket',
+        );
+      }
+    } on SocketException {
+      return SimpleResult(
+        success: false,
+        errorMessage: 'No internet connection',
+      );
+    } on TimeoutException {
+      return SimpleResult(success: false, errorMessage: 'Request timed out');
+    } catch (e) {
+      debugPrint('[SupportService] Error cancelling ticket: $e');
+      return SimpleResult(
         success: false,
         errorMessage: 'An unexpected error occurred',
       );
@@ -788,11 +854,11 @@ class ServerNotification {
       case 'created':
         return const Color(0xFF3B82F6); // Blue
       case 'admin_message':
-        return const Color(0xFF10B981); // Green
+        return AppColors.success; // Green
       case 'status_changed':
         return const Color(0xFFF59E0B); // Amber
       case 'resolved':
-        return const Color(0xFF10B981); // Green
+        return AppColors.success; // Green
       default:
         return const Color(0xFF6B7280); // Gray
     }

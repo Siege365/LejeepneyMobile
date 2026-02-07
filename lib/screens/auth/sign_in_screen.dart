@@ -1,4 +1,6 @@
+// Registration Screen
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
@@ -48,10 +50,9 @@ class _SignInScreenState extends State<SignInScreen> {
 
       if (mounted) {
         // Success - navigate to home
-        Navigator.pushAndRemoveUntil(
+        Navigator.pushReplacement(
           context,
           FadeRoute(page: const MainNavigation()),
-          (route) => false,
         );
       }
     } on AuthException catch (e) {
@@ -124,9 +125,9 @@ class _SignInScreenState extends State<SignInScreen> {
                         const SizedBox(height: 24),
 
                         // Title
-                        const Text(
+                        Text(
                           'Create Account',
-                          style: TextStyle(
+                          style: GoogleFonts.slackey(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: AppColors.textPrimary,
@@ -157,7 +158,6 @@ class _SignInScreenState extends State<SignInScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your name';
                             }
-                            // SECURITY: Validate name format using SecurityUtils
                             final nameError = SecurityUtils.validateName(value);
                             if (nameError != null) {
                               return nameError;
@@ -190,10 +190,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your email';
                             }
-                            // SECURITY: Use SecurityUtils for email validation
-                            final emailError = SecurityUtils.validateEmail(
-                              value,
-                            );
+                            final emailError = SecurityUtils.validateEmail(value);
                             if (emailError != null) {
                               return emailError;
                             }
@@ -238,7 +235,6 @@ class _SignInScreenState extends State<SignInScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter a password';
                             }
-                            // SECURITY: Use SecurityUtils for password validation
                             return SecurityUtils.validatePasswordSimple(value);
                           },
                         ),
@@ -297,40 +293,42 @@ class _SignInScreenState extends State<SignInScreen> {
                             onPressed: _isLoading ? null : _register,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.darkBlue,
-                              disabledBackgroundColor: AppColors.darkBlue
-                                  .withValues(alpha: 0.6),
+                              disabledBackgroundColor:
+                                  AppColors.darkBlue.withValues(alpha: 0.6),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(25),
                               ),
                             ),
                             child: _isLoading
                                 ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
+                                    width: 20,
+                                    height: 20,
                                     child: CircularProgressIndicator(
                                       color: AppColors.white,
                                       strokeWidth: 2,
                                     ),
                                   )
-                                : const Text(
-                                    'SIGN UP',
-                                    style: TextStyle(
-                                      color: AppColors.white,
+                                : Text(
+                                    'Sign Up',
+                                    style: GoogleFonts.slackey(
                                       fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.white,
                                     ),
                                   ),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 24),
 
-                        // Already have an account? Login
+                        // Already have an account
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text(
-                              "Already have an account? ",
-                              style: TextStyle(color: AppColors.gray),
+                            Text(
+                              'Already have an account? ',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
                             ),
                             GestureDetector(
                               onTap: _isLoading
@@ -338,16 +336,14 @@ class _SignInScreenState extends State<SignInScreen> {
                                   : () {
                                       Navigator.pushReplacement(
                                         context,
-                                        SlideLeftRoute(
-                                          page: const LoginScreen(),
-                                        ),
+                                        FadeRoute(page: const LoginScreen()),
                                       );
                                     },
-                              child: const Text(
-                                'Login',
-                                style: TextStyle(
+                              child: Text(
+                                'Log In',
+                                style: GoogleFonts.slackey(
+                                  fontSize: 14,
                                   color: AppColors.darkBlue,
-                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),

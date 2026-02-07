@@ -167,6 +167,54 @@ class TicketLabelSelector {
       'request',
     ];
 
+    // Complaint keywords
+    final complaintKeywords = [
+      'complain',
+      'complaint',
+      'dissatisfied',
+      'unhappy',
+      'disappointed',
+      'poor service',
+      'bad experience',
+      'unacceptable',
+      'frustrated',
+    ];
+
+    // Inquiry keywords
+    final inquiryKeywords = [
+      'how to',
+      'how do i',
+      'what is',
+      'where can',
+      'when will',
+      'question',
+      'ask',
+      'inquire',
+      'inquiry',
+      'info',
+      'information',
+    ];
+
+    // Suggestion keywords
+    final suggestionKeywords = [
+      'suggestion',
+      'recommend',
+      'should add',
+      'could you',
+      'please add',
+      'enhancement',
+      'better if',
+    ];
+
+    // Report keywords
+    final reportKeywords = [
+      'report',
+      'reporting',
+      'issue with',
+      'problem with',
+      'found a',
+    ];
+
     // Check for bug keywords first (highest priority)
     for (final keyword in bugKeywords) {
       if (lowerMessage.contains(keyword)) {
@@ -211,9 +259,53 @@ class TicketLabelSelector {
       }
     }
 
-    // Default fallback
+    // Check for complaint keywords
+    for (final keyword in complaintKeywords) {
+      if (lowerMessage.contains(keyword)) {
+        return const TicketLabelSelector._(
+          type: TicketType.complaint,
+          priority: TicketPriority.medium,
+          autoSelectReason: 'Detected complaint or service concern',
+        );
+      }
+    }
+
+    // Check for inquiry keywords
+    for (final keyword in inquiryKeywords) {
+      if (lowerMessage.contains(keyword)) {
+        return const TicketLabelSelector._(
+          type: TicketType.inquiry,
+          priority: TicketPriority.low,
+          autoSelectReason: 'Detected inquiry or question',
+        );
+      }
+    }
+
+    // Check for suggestion keywords
+    for (final keyword in suggestionKeywords) {
+      if (lowerMessage.contains(keyword)) {
+        return const TicketLabelSelector._(
+          type: TicketType.suggestion,
+          priority: TicketPriority.low,
+          autoSelectReason: 'Detected suggestion or enhancement idea',
+        );
+      }
+    }
+
+    // Check for report keywords
+    for (final keyword in reportKeywords) {
+      if (lowerMessage.contains(keyword)) {
+        return const TicketLabelSelector._(
+          type: TicketType.report,
+          priority: TicketPriority.medium,
+          autoSelectReason: 'Detected issue report',
+        );
+      }
+    }
+
+    // Default fallback to 'other' instead of 'general' for unmatched patterns
     return const TicketLabelSelector._(
-      type: TicketType.general,
+      type: TicketType.other,
       priority: TicketPriority.medium,
       autoSelectReason: null,
     );

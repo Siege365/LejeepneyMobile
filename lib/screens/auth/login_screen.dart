@@ -1,5 +1,6 @@
 // Login Screen
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
@@ -133,6 +134,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           fit: BoxFit.contain,
                         ),
                         const SizedBox(height: 32),
+
+                        // Title
+                        Text(
+                          'Login',
+                          style: GoogleFonts.slackey(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
 
                         // Email Field
                         TextFormField(

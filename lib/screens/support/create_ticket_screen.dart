@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../constants/app_colors.dart';
 import '../../models/support_ticket.dart';
 import '../../services/support_service.dart';
-import '../../services/recent_activity_service.dart';
+import '../../services/recent_activity_service_v2.dart';
 import '../../utils/ticket_label_selector.dart';
 
 /// Screen to create a new support ticket with smart label auto-selection
@@ -39,7 +40,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   bool _isSubmitting = false;
   bool _hasSubmitted = false; // Prevent duplicate submissions
   String? _autoSelectReason;
-  bool _isAutoSelected = false;
+  bool _userManuallyChanged = false;
 
   @override
   void initState() {
@@ -70,15 +71,16 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         _selectedType = selector!.type;
         _selectedPriority = selector.priority;
         _autoSelectReason = selector.autoSelectReason;
-        _isAutoSelected = true;
+        _userManuallyChanged =
+            false; // Auto-selected, message analysis can still refine
       });
     }
   }
 
   /// Analyze message content and suggest labels (debounced)
   void _onMessageChanged() {
-    // Only auto-suggest if user hasn't manually changed and message is substantial
-    if (!_isAutoSelected && _messageController.text.length > 20) {
+    // Only auto-suggest if user hasn't manually changed the type/priority
+    if (!_userManuallyChanged && _messageController.text.length > 20) {
       final selector = TicketLabelSelector.fromMessageContent(
         _messageController.text,
       );
@@ -131,8 +133,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         if (result.success) {
           // Backend automatically creates notification for ticket creation
           // Record in recent activity
-          await RecentActivityService.addTicketCreated(
-            userId: widget.userEmail,
+          await RecentActivityServiceV2.addTicketCreated(
             ticketId: result.ticketId!,
             subject: _subjectController.text.trim(),
             ticketType: _selectedType.displayName,
@@ -166,7 +167,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 64),
+            Icon(Icons.check_circle, color: AppColors.success, size: 64),
             const SizedBox(height: 16),
             const Text(
               'Ticket Created!',
@@ -189,7 +190,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 Navigator.pop(context, true); // Return to list with refresh
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4A90A4),
+                backgroundColor: AppColors.teal,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -268,7 +269,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                             ? widget.userName[0].toUpperCase()
                             : 'U',
                         style: const TextStyle(
-                          color: Color(0xFF4A90A4),
+                          color: AppColors.teal,
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
@@ -363,7 +364,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(
-                            color: Color(0xFF4A90A4),
+                            color: AppColors.teal,
                             width: 2,
                           ),
                         ),
@@ -422,7 +423,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(
-                            color: Color(0xFF4A90A4),
+                            color: AppColors.teal,
                             width: 2,
                           ),
                         ),
@@ -467,7 +468,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                         ? null
                         : _submitTicket,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4A90A4),
+                      backgroundColor: AppColors.teal,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -515,7 +516,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             if (selected) {
               setState(() {
                 _selectedType = type;
-                _isAutoSelected = false; // User manually changed
+                _userManuallyChanged =
+                    true; // Lock selection from auto-override
               });
             }
           },
@@ -524,7 +526,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             fontSize: 13,
           ),
           backgroundColor: Colors.grey.shade100,
-          selectedColor: const Color(0xFF4A90A4),
+          selectedColor: AppColors.teal,
           checkmarkColor: Colors.white,
         );
       }).toList(),
@@ -544,7 +546,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               onTap: () {
                 setState(() {
                   _selectedPriority = priority;
-                  _isAutoSelected = false; // User manually changed
+                  _userManuallyChanged =
+                      true; // Lock selection from auto-override
                 });
               },
               borderRadius: BorderRadius.circular(8),

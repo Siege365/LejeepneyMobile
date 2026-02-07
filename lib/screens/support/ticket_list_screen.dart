@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../constants/app_colors.dart';
 import '../../models/support_ticket.dart';
 import '../../services/support_service.dart';
 import 'create_ticket_screen.dart';
 import 'ticket_detail_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Screen to display list of user's support tickets
 class TicketListScreen extends StatefulWidget {
@@ -169,17 +171,17 @@ class _TicketListScreenState extends State<TicketListScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _navigateToCreateTicket,
-        backgroundColor: const Color(0xFF4A90A4),
+        backgroundColor: AppColors.teal,
         elevation: 4,
         extendedPadding: const EdgeInsets.symmetric(
-          horizontal: 24,
+          horizontal: 16,
           vertical: 14,
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         icon: const Icon(Icons.add, color: Colors.white, size: 24),
-        label: const Text(
+        label: Text(
           'New Ticket',
-          style: TextStyle(
+          style: GoogleFonts.slackey(
             color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -205,6 +207,8 @@ class _TicketListScreenState extends State<TicketListScreen> {
             _buildFilterChip(TicketStatus.inProgress, 'In Progress'),
             const SizedBox(width: 8),
             _buildFilterChip(TicketStatus.resolved, 'Resolved'),
+            const SizedBox(width: 8),
+            _buildFilterChip(TicketStatus.cancelled, 'Cancelled'),
           ],
         ),
       ),
@@ -221,7 +225,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
         fontSize: 13,
       ),
       backgroundColor: Colors.grey.shade100,
-      selectedColor: const Color(0xFF4A90A4),
+      selectedColor: AppColors.teal,
       checkmarkColor: Colors.white,
       onSelected: (selected) {
         setState(() {
@@ -235,7 +239,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF4A90A4)),
+        child: CircularProgressIndicator(color: AppColors.teal),
       );
     }
 
@@ -257,7 +261,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
               ElevatedButton(
                 onPressed: _loadTickets,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A90A4),
+                  backgroundColor: AppColors.teal,
                 ),
                 child: const Text(
                   'Try Again',
@@ -297,7 +301,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
               ElevatedButton.icon(
                 onPressed: _navigateToCreateTicket,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A90A4),
+                  backgroundColor: AppColors.teal,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 12,
@@ -317,7 +321,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadTickets,
-      color: const Color(0xFF4A90A4),
+      color: AppColors.teal,
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.all(16),
@@ -327,7 +331,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(
-                child: CircularProgressIndicator(color: Color(0xFF4A90A4)),
+                child: CircularProgressIndicator(color: AppColors.teal),
               ),
             );
           }

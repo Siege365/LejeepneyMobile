@@ -474,277 +474,251 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
       ),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            // Track landmark search activity
-            RecentActivityServiceV2.addLocationSearch(
-              searchQuery: landmark.category,
-              resultName: landmark.name,
-            );
-
-            // TODO: Navigate to landmark detail or show on map
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Navigate to ${landmark.name}'),
-                backgroundColor: AppColors.darkBlue,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            );
-          },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Image with badges overlay
-              Stack(
-                children: [
-                  // Image
-                  ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                    ),
-                    child: landmark.iconUrl != null
-                        ? Image.network(
-                            landmark.iconUrl!,
-                            width: double.infinity,
-                            height: 180,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                                  width: double.infinity,
-                                  height: 180,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        AppColors.primary.withValues(
-                                          alpha: 0.6,
-                                        ),
-                                        AppColors.darkBlue.withValues(
-                                          alpha: 0.4,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    _getCategoryIcon(landmark.category),
-                                    color: AppColors.white,
-                                    size: 60,
-                                  ),
-                                ),
-                          )
-                        : Container(
-                            width: double.infinity,
-                            height: 180,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  AppColors.primary.withValues(alpha: 0.6),
-                                  AppColors.darkBlue.withValues(alpha: 0.4),
-                                ],
-                              ),
-                            ),
-                            child: Icon(
-                              _getCategoryIcon(landmark.category),
-                              color: AppColors.white,
-                              size: 60,
-                            ),
-                          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image with badges overlay
+            Stack(
+              children: [
+                // Image
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
                   ),
-                  // Badges overlay
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    child: Row(
-                      children: [
-                        // Category badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            landmark.categoryDisplayName.toUpperCase(),
-                            style: GoogleFonts.slackey(
-                              fontSize: 10,
-                              color: AppColors.darkBlue,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        if (landmark.isFeatured) ...[
-                          const SizedBox(width: 8),
-                          // Featured badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.success,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.star,
-                                  size: 12,
-                                  color: AppColors.white,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'FEATURED',
-                                  style: GoogleFonts.slackey(
-                                    fontSize: 10,
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.bold,
+                  child: landmark.iconUrl != null
+                      ? Image.network(
+                          landmark.iconUrl!,
+                          width: double.infinity,
+                          height: 180,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                                width: double.infinity,
+                                height: 180,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      AppColors.primary.withValues(alpha: 0.6),
+                                      AppColors.darkBlue.withValues(alpha: 0.4),
+                                    ],
                                   ),
                                 ),
+                                child: Icon(
+                                  _getCategoryIcon(landmark.category),
+                                  color: AppColors.white,
+                                  size: 60,
+                                ),
+                              ),
+                        )
+                      : Container(
+                          width: double.infinity,
+                          height: 180,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppColors.primary.withValues(alpha: 0.6),
+                                AppColors.darkBlue.withValues(alpha: 0.4),
                               ],
                             ),
                           ),
-                        ],
+                          child: Icon(
+                            _getCategoryIcon(landmark.category),
+                            color: AppColors.white,
+                            size: 60,
+                          ),
+                        ),
+                ),
+                // Badges overlay
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Row(
+                    children: [
+                      // Category badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          landmark.categoryDisplayName.toUpperCase(),
+                          style: GoogleFonts.slackey(
+                            fontSize: 10,
+                            color: AppColors.darkBlue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (landmark.isFeatured) ...[
+                        const SizedBox(width: 8),
+                        // Featured badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.success,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.star,
+                                size: 12,
+                                color: AppColors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'FEATURED',
+                                style: GoogleFonts.slackey(
+                                  fontSize: 10,
+                                  color: AppColors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title
+                  Text(
+                    landmark.name,
+                    style: GoogleFonts.slackey(
+                      fontSize: 18,
+                      color: AppColors.textPrimary,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (landmark.description != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            landmark.description!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.gray,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-              // Content
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title
-                    Text(
-                      landmark.name,
-                      style: GoogleFonts.slackey(
-                        fontSize: 18,
-                        color: AppColors.textPrimary,
-                        height: 1.2,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (landmark.description != null) ...[
-                      const SizedBox(height: 8),
+                  ],
+                  const SizedBox(height: 16),
+                  // Distance and category info side by side
+                  Row(
+                    children: [
+                      // Distance
                       Row(
                         children: [
                           Icon(
-                            Icons.location_on,
-                            size: 16,
-                            color: AppColors.primary,
+                            Icons.directions_walk,
+                            size: 18,
+                            color: AppColors.darkBlue,
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              landmark.description!,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.gray,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          const SizedBox(width: 6),
+                          Text(
+                            distanceText,
+                            style: GoogleFonts.slackey(
+                              fontSize: 14,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 24),
+                      // Icon indicator
+                      Row(
+                        children: [
+                          Icon(
+                            _getCategoryIcon(landmark.category),
+                            size: 18,
+                            color: AppColors.darkBlue,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            landmark.categoryDisplayName,
+                            style: GoogleFonts.slackey(
+                              fontSize: 14,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                         ],
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    // Distance and category info side by side
-                    Row(
-                      children: [
-                        // Distance
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.directions_walk,
-                              size: 18,
-                              color: AppColors.darkBlue,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              distanceText,
-                              style: GoogleFonts.slackey(
-                                fontSize: 14,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ],
+                  ),
+                  const SizedBox(height: 16),
+                  // View Details Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => _showLandmarkPreviewModal(landmark),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.success,
+                        foregroundColor: AppColors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(width: 24),
-                        // Icon indicator
-                        Row(
-                          children: [
-                            Icon(
-                              _getCategoryIcon(landmark.category),
-                              size: 18,
-                              color: AppColors.darkBlue,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              landmark.categoryDisplayName,
-                              style: GoogleFonts.slackey(
-                                fontSize: 14,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // View Details Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => _showLandmarkPreviewModal(landmark),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.success,
-                          foregroundColor: AppColors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'View Details',
-                              style: GoogleFonts.slackey(
-                                fontSize: 14,
-                                color: AppColors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.arrow_forward,
-                              size: 18,
+                        elevation: 0,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'View Details',
+                            style: GoogleFonts.slackey(
+                              fontSize: 14,
                               color: AppColors.white,
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.arrow_forward,
+                            size: 18,
+                            color: AppColors.white,
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -855,6 +829,8 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
                           setState(() => _currentPage = index);
                         },
                         itemBuilder: (context, index) {
+                          final imageUrl = widget.images[index];
+
                           return Container(
                             margin: const EdgeInsets.symmetric(horizontal: 16),
                             decoration: BoxDecoration(
@@ -870,7 +846,7 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(16),
                               child: Image.network(
-                                widget.images[index],
+                                imageUrl,
                                 fit: BoxFit.cover,
                                 loadingBuilder: (context, child, progress) {
                                   if (progress == null) return child;
@@ -890,19 +866,18 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
                                     ),
                                   );
                                 },
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Container(
-                                      color: AppColors.primary.withValues(
-                                        alpha: 0.3,
-                                      ),
-                                      child: Icon(
-                                        widget.getCategoryIcon(
-                                          landmark.category,
-                                        ),
-                                        size: 60,
-                                        color: AppColors.darkBlue,
-                                      ),
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.3,
                                     ),
+                                    child: Icon(
+                                      widget.getCategoryIcon(landmark.category),
+                                      size: 60,
+                                      color: AppColors.darkBlue,
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           );
