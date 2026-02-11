@@ -55,5 +55,5 @@ class MapConstants {
 
   // ========== NOMINATIM API ==========
   static const String nominatimBaseUrl = 'https://nominatim.openstreetmap.org';
-  static const String nominatimUserAgent = 'Lejeepney App';
+  static const String nominatimUserAgent = 'LeJeepney App';
 }

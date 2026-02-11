@@ -263,7 +263,7 @@ class AppTheme {
   static DividerThemeData get _dividerTheme => const DividerThemeData(
     color: AppColors.lightGray,
     thickness: 1,
-    space: AppDimensions.paddingMedium,
+    space: 1,
   );
 }
 

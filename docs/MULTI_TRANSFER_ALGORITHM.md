@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the implementation of the multi-transfer route algorithm for the Lejeepney Flutter app. The algorithm finds optimal jeepney route combinations when no direct route is available between the user's origin and destination.
+This document describes the implementation of the multi-transfer route algorithm for the LeJeepney Flutter app. The algorithm finds optimal jeepney route combinations when no direct route is available between the user's origin and destination.
 
 ## Files Created/Modified
 

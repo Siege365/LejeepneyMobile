@@ -73,10 +73,9 @@ class ResilientNetworkImage extends ImageProvider<ResilientNetworkImage> {
     ResilientNetworkImage key,
     ImageDecoderCallback decode,
   ) async {
-    int attempts = 0;
     Exception? lastError;
 
-    while (attempts <= maxRetries) {
+    for (int attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         final response = await client
             .get(Uri.parse(url), headers: headers)
@@ -93,13 +92,14 @@ class ResilientNetworkImage extends ImageProvider<ResilientNetworkImage> {
         } else if (response.statusCode == 404) {
           // Don't retry 404s
           throw Exception('Tile not found (404)');
+        } else {
+          throw Exception('HTTP ${response.statusCode}');
         }
       } on http.ClientException catch (e) {
         lastError = e;
         // Network errors are often transient, retry them
-        if (attempts < maxRetries) {
-          await Future.delayed(retryDelay * (attempts + 1));
-          attempts++;
+        if (attempt < maxRetries) {
+          await Future.delayed(retryDelay * (attempt + 1));
           continue;
         }
       } catch (e) {
@@ -107,13 +107,11 @@ class ResilientNetworkImage extends ImageProvider<ResilientNetworkImage> {
         // Don't retry other errors
         break;
       }
-
-      attempts++;
     }
 
     // All retries failed, throw a silent error
     if (kDebugMode) {
-      debugPrint('Tile load failed after $attempts attempts: $url');
+      debugPrint('Tile load failed after ${maxRetries + 1} attempts: $url');
     }
 
     // Return a 1x1 transparent image instead of throwing

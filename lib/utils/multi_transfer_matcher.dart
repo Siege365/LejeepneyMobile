@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:latlong2/latlong.dart';
 import '../models/jeepney_route.dart';
+import '../services/fare_settings_service.dart';
 import 'route_matcher.dart';
 
 /// Represents a transfer point between two jeepney routes
@@ -144,7 +145,8 @@ class MultiTransferMatcher {
     for (final intersection in intersections) {
       final route1 = intersection['route1'] as JeepneyRoute;
       final route2 = intersection['route2'] as JeepneyRoute;
-      final intersectionPoint = intersection['point'] as LatLng;
+      final pointOnRoute1 = intersection['point'] as LatLng;
+      final pointOnRoute2 = intersection['point2'] as LatLng;
       final walkingDistance = intersection['distance'] as double;
 
       // Skip if walking distance too far
@@ -158,14 +160,14 @@ class MultiTransferMatcher {
       );
       final route1CoversIntersection = _routeCoversPoint(
         route1,
-        intersectionPoint,
+        pointOnRoute1,
         bufferMeters,
       );
 
       // Check if route2 can get us from intersection to end
       final route2CoversIntersection = _routeCoversPoint(
         route2,
-        intersectionPoint,
+        pointOnRoute2,
         bufferMeters,
       );
       final route2CoversEnd = _routeCoversPoint(route2, endPoint, bufferMeters);
@@ -177,7 +179,8 @@ class MultiTransferMatcher {
           route2CoversEnd) {
         final multiRoute = _buildMultiTransferRoute(
           segments: [route1, route2],
-          transferPoints: [intersectionPoint],
+          alightPoints: [pointOnRoute1],
+          boardPoints: [pointOnRoute2],
           walkingDistances: [walkingDistance],
           startPoint: startPoint,
           endPoint: endPoint,
@@ -202,7 +205,8 @@ class MultiTransferMatcher {
           route1CoversEnd) {
         final multiRoute = _buildMultiTransferRoute(
           segments: [route2, route1],
-          transferPoints: [intersectionPoint],
+          alightPoints: [pointOnRoute2],
+          boardPoints: [pointOnRoute1],
           walkingDistances: [walkingDistance],
           startPoint: startPoint,
           endPoint: endPoint,
@@ -267,16 +271,18 @@ class MultiTransferMatcher {
           if (first.route.id == second.route.id) continue;
 
           // Calculate walking distance at transfer point
-          final transferPoint = firstHalf.last;
-          final walkingDist = _calculateWalkingDistanceToRoute(
-            transferPoint,
+          final transferAlightPoint = firstHalf.last;
+          final boardResult = _findClosestPointOnRoute(
+            transferAlightPoint,
             second.route.path,
           );
+          final walkingDist = boardResult.$2;
 
           if (walkingDist <= maxWalkingDistance) {
             final multiRoute = _buildMultiTransferRoute(
               segments: [first.route, second.route],
-              transferPoints: [transferPoint],
+              alightPoints: [transferAlightPoint],
+              boardPoints: [boardResult.$1],
               walkingDistances: [walkingDist],
               startPoint: userPath.first,
               endPoint: userPath.last,
@@ -347,22 +353,26 @@ class MultiTransferMatcher {
             continue;
           }
 
-          final transfer1 = segment1.last;
-          final transfer2 = segment2.last;
+          final transfer1Alight = segment1.last;
+          final transfer2Alight = segment2.last;
 
-          final walk1 = _calculateWalkingDistanceToRoute(
-            transfer1,
+          final board1Result = _findClosestPointOnRoute(
+            transfer1Alight,
             second.route.path,
           );
-          final walk2 = _calculateWalkingDistanceToRoute(
-            transfer2,
+          final board2Result = _findClosestPointOnRoute(
+            transfer2Alight,
             third.route.path,
           );
+
+          final walk1 = board1Result.$2;
+          final walk2 = board2Result.$2;
 
           if (walk1 <= maxWalkingDistance && walk2 <= maxWalkingDistance) {
             final multiRoute = _buildMultiTransferRoute(
               segments: [first.route, second.route, third.route],
-              transferPoints: [transfer1, transfer2],
+              alightPoints: [transfer1Alight, transfer2Alight],
+              boardPoints: [board1Result.$1, board2Result.$1],
               walkingDistances: [walk1, walk2],
               startPoint: userPath.first,
               endPoint: userPath.last,
@@ -467,25 +477,29 @@ class MultiTransferMatcher {
     return false;
   }
 
-  /// Calculate walking distance from a point to nearest point on a route
-  static double _calculateWalkingDistanceToRoute(
+  /// Find the closest point on a route path and its distance in meters
+  /// Returns (closestPoint, distanceMeters)
+  static (LatLng, double) _findClosestPointOnRoute(
     LatLng point,
     List<LatLng> routePath,
   ) {
     double minDist = double.infinity;
+    LatLng closest = point;
     for (final routePoint in routePath) {
       final dist = _haversineDistance(point, routePoint) * 1000;
       if (dist < minDist) {
         minDist = dist;
+        closest = routePoint;
       }
     }
-    return minDist;
+    return (closest, minDist);
   }
 
   /// Build a MultiTransferRoute from segments
   static MultiTransferRoute? _buildMultiTransferRoute({
     required List<JeepneyRoute> segments,
-    required List<LatLng> transferPoints,
+    required List<LatLng> alightPoints,
+    required List<LatLng> boardPoints,
     required List<double> walkingDistances,
     required LatLng startPoint,
     required LatLng endPoint,
@@ -500,11 +514,11 @@ class MultiTransferMatcher {
     double totalDistance = 0.0;
     double totalWalking = 0.0;
 
-    // Build route segments
+    // Build route segments using proper alight/board points
     for (int i = 0; i < segments.length; i++) {
       final route = segments[i];
-      final segStart = i == 0 ? startPoint : transferPoints[i - 1];
-      final segEnd = i == segments.length - 1 ? endPoint : transferPoints[i];
+      final segStart = i == 0 ? startPoint : boardPoints[i - 1];
+      final segEnd = i == segments.length - 1 ? endPoint : alightPoints[i];
 
       // Estimate distance for this segment
       final segDistance = _haversineDistance(segStart, segEnd);
@@ -531,8 +545,8 @@ class MultiTransferMatcher {
     }
 
     // Build transfer points
-    for (int i = 0; i < transferPoints.length; i++) {
-      final tpLocation = transferPoints[i];
+    for (int i = 0; i < alightPoints.length; i++) {
+      final tpLocation = alightPoints[i];
       final walkDist = walkingDistances[i];
       totalWalking += walkDist;
 
@@ -606,17 +620,12 @@ class MultiTransferMatcher {
     return nearest;
   }
 
-  /// Calculate fare based on distance
+  /// Calculate fare based on distance using admin-configured rates
   static double _calculateFare(double distanceKm, double baseFare) {
-    const double baseDistance = 4.0; // First 4km
-    const double additionalRatePerKm = 1.80;
-
-    if (distanceKm <= baseDistance) {
-      return baseFare;
-    }
-
-    final additionalKm = distanceKm - baseDistance;
-    return baseFare + (additionalKm * additionalRatePerKm);
+    return FareSettingsService.instance.calculateFare(
+      distanceKm,
+      routeBaseFare: baseFare,
+    );
   }
 
   /// Sample a path to reduce points

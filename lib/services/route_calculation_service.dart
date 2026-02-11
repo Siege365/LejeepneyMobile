@@ -4,63 +4,39 @@ import '../models/jeepney_route.dart';
 import '../utils/multi_transfer_matcher.dart';
 import '../utils/route_matcher.dart';
 import '../utils/transit_routing/transit_routing.dart';
-import 'api_service.dart';
+import 'app_data_preloader.dart';
 
-/// Service responsible for calculating routes and matching jeepney routes
-/// Follows Single Responsibility Principle - only handles route calculation logic
+/// Service responsible for calculating routes and matching jeepney routes.
+/// Uses pre-loaded data from AppDataPreloader for instant calculations
+/// instead of re-fetching routes/landmarks from API every time.
 class RouteCalculationService {
-  final ApiService _apiService;
-  final HybridTransitRouter _hybridRouter;
+  RouteCalculationService();
 
-  RouteCalculationService({
-    required ApiService apiService,
-    HybridTransitRouter? hybridRouter,
-  }) : _apiService = apiService,
-       _hybridRouter =
-           hybridRouter ??
-           HybridTransitRouter(
-             config: const HybridRoutingConfig(maxResults: 5, maxTransfers: 3),
-           );
-
-  /// Calculate routes between two points
-  /// Returns a RouteCalculationResult with all matched routes
+  /// Calculate routes between two points using pre-loaded data.
+  /// The hybrid router and route data are already cached by AppDataPreloader,
+  /// so this skips all network calls and graph rebuilds.
   Future<RouteCalculationResult> calculateRoutes({
     required LatLng origin,
     required LatLng destination,
     List<LatLng>? osrmPath,
   }) async {
+    final stopwatch = Stopwatch()..start();
+
     try {
-      // Fetch all admin-created jeepney routes from API
-      final jeepneyRoutes = await _apiService.fetchAllRoutes();
+      final preloader = AppDataPreloader.instance;
+      final hybridRouter = preloader.hybridRouter;
 
-      // Fetch landmarks for transfer point identification
-      List<Map<String, dynamic>>? landmarks;
-      try {
-        final landmarkData = await _apiService.fetchAllLandmarks();
-        landmarks = landmarkData
-            .map(
-              (l) => {
-                'id': l.id,
-                'name': l.name,
-                'latitude': l.latitude,
-                'longitude': l.longitude,
-              },
-            )
-            .toList();
-      } catch (e) {
-        debugPrint('Failed to fetch landmarks for transfer points: $e');
-      }
+      // Use pre-loaded routes (no API call needed)
+      final jeepneyRoutes = preloader.cachedRoutes;
+      final landmarks = preloader.cachedLandmarkMaps;
 
-      // Pre-initialize router graph in background to avoid blocking UI
-      debugPrint('[RouteCalcService] Pre-initializing hybrid router...');
-      await _hybridRouter.preInitialize(
-        routes: jeepneyRoutes,
-        landmarks: landmarks,
+      debugPrint(
+        '[RouteCalcService] Using ${jeepneyRoutes.length} pre-loaded routes, '
+        '${landmarks?.length ?? 0} landmarks',
       );
-      debugPrint('[RouteCalcService] Hybrid router ready');
 
-      // Use hybrid router for best results
-      final hybridResult = await _hybridRouter.findRoutes(
+      // Use hybrid router for best results (graph already pre-built)
+      final hybridResult = await hybridRouter.findRoutes(
         origin: origin,
         destination: destination,
         jeepneyRoutes: jeepneyRoutes,
@@ -68,10 +44,11 @@ class RouteCalculationService {
         landmarks: landmarks,
       );
 
-      debugPrint('Hybrid routing result: ${hybridResult.toString()}');
-      debugPrint('  - Routes found: ${hybridResult.suggestedRoutes.length}');
+      debugPrint(
+        '[RouteCalcService] Hybrid result: ${hybridResult.suggestedRoutes.length} routes',
+      );
 
-      // Also do legacy matching for backward compatibility
+      // Legacy matching for backward compatibility (only if OSRM path exists)
       List<RouteMatchResult> legacyMatches = [];
       List<MultiTransferRoute> legacyMultiTransfer = [];
 
@@ -94,10 +71,14 @@ class RouteCalculationService {
         }
       }
 
-      // Calculate fare from hybrid result
       final calculatedFare = hybridResult.suggestedRoutes.isNotEmpty
           ? hybridResult.suggestedRoutes.first.totalFare
           : 0.0;
+
+      stopwatch.stop();
+      debugPrint(
+        '[RouteCalcService] Calculation done in ${stopwatch.elapsedMilliseconds}ms',
+      );
 
       return RouteCalculationResult(
         success: true,

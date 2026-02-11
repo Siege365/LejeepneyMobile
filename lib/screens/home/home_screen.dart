@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/travel_history_item.dart';
@@ -10,6 +11,8 @@ import '../profile/recent_activity_screen.dart';
 import '../../models/recent_activity_model.dart';
 import '../../services/recent_activity_service_v2.dart';
 import '../../services/auth_service.dart';
+import '../../services/settings_service.dart';
+import '../../services/localization_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -93,29 +96,36 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Welcome to Lejeepney',
-                                style: GoogleFonts.slackey(
-                                  fontSize: 27.5,
-                                  color: AppColors.textPrimary.withValues(
-                                    alpha: 0.8,
+                          child: Consumer<SettingsService>(
+                            builder: (context, settings, child) {
+                              final lang = settings.language;
+                              final t = (String key) =>
+                                  LocalizationService.translate(key, lang);
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    t('welcome_message'),
+                                    style: GoogleFonts.slackey(
+                                      fontSize: 27.5,
+                                      color: AppColors.textPrimary.withValues(
+                                        alpha: 0.8,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Your jeepney companion in Davao City',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.textPrimary.withValues(
-                                    alpha: 0.7,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Your jeepney companion in Davao City',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textPrimary.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ],
+                                ],
+                              );
+                            },
                           ),
                         ),
                         // Help / Tutorial button

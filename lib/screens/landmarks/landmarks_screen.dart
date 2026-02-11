@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../models/landmark.dart';
-import '../../services/api_service.dart';
-import '../../services/recent_activity_service_v2.dart';
+import '../../repositories/landmark_repository.dart';
+import '../../services/settings_service.dart';
 import '../main_navigation.dart';
 
 class LandmarksScreen extends StatefulWidget {
@@ -18,7 +19,6 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
   String _selectedCategory = 'All';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-  final ApiService _apiService = ApiService();
 
   // API data
   List<Landmark> _apiLandmarks = [];
@@ -50,6 +50,9 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
   }
 
   Future<void> _getUserLocation() async {
+    // Respect user's location services toggle
+    if (!SettingsService.instance.locationServices) return;
+
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return;
@@ -88,8 +91,29 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
     });
 
     try {
-      // Use GET endpoint for now (POST nearby has validation issues)
-      final landmarks = await _apiService.fetchAllLandmarks();
+      // Use LandmarkRepository (data is pre-loaded during splash)
+      final landmarkRepo = context.read<LandmarkRepository>();
+
+      List<Landmark> landmarks;
+      if (landmarkRepo.hasLandmarks) {
+        // Landmarks already cached from preloader — instant load
+        landmarks = landmarkRepo.landmarks;
+        debugPrint(
+          '[LandmarksScreen] Using ${landmarks.length} pre-loaded landmarks',
+        );
+      } else {
+        // Fallback: fetch from API through repository
+        final result = await landmarkRepo.fetchAllLandmarks();
+        if (!mounted) return;
+        if (result.isSuccess && result.data != null) {
+          landmarks = result.data!;
+          debugPrint(
+            '[LandmarksScreen] Fetched ${landmarks.length} landmarks via repository',
+          );
+        } else {
+          throw Exception(result.error ?? 'Failed to load landmarks');
+        }
+      }
 
       // Calculate distances if user location is available
       List<Landmark> landmarksWithDistances = landmarks;
@@ -107,7 +131,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint('API Error: $e');
+      debugPrint('Landmarks Error: $e');
 
       if (!mounted) return;
 
@@ -456,7 +480,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
   // Build card for API landmark data
   Widget _buildApiLandmarkCard(Landmark landmark) {
     final distanceText = landmark.distance != null
-        ? '${landmark.distance!.toStringAsFixed(1)} km'
+        ? SettingsService.instance.formatDistance(landmark.distance!)
         : 'N/A';
 
     return Container(

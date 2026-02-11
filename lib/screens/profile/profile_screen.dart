@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../models/user_model.dart';
-import '../../services/auth_service.dart';
+import '../../repositories/auth_repository.dart';
 import '../../services/ticket_notification_service.dart';
 import '../../utils/page_transitions.dart';
 import '../auth/login_screen.dart';
@@ -21,7 +22,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _authService = AuthService();
   UserModel? _user;
   bool _isLoading = true;
   bool _isLoggingOut = false;
@@ -61,13 +61,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Verify with server (don't show cached data to prevent flicker)
-      final user = await _authService.getCurrentUser();
-      if (mounted) {
-        setState(() {
-          _user = user;
-          _isLoading = false;
-        });
+      // Use AuthRepository (user data is pre-loaded during splash)
+      final authRepo = context.read<AuthRepository>();
+
+      if (authRepo.isAuthenticated && authRepo.user != null) {
+        // User already cached from preloader — instant load
+        if (mounted) {
+          setState(() {
+            _user = authRepo.user;
+            _isLoading = false;
+          });
+        }
+        debugPrint('[ProfileScreen] Using pre-loaded user data');
+      } else {
+        // Fallback: initialize auth repository
+        await authRepo.initialize();
+        if (mounted) {
+          setState(() {
+            _user = authRepo.user;
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -102,7 +116,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoggingOut = true);
 
     try {
-      await _authService.logout();
+      await context.read<AuthRepository>().logout();
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,

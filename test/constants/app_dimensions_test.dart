@@ -1,7 +1,7 @@
 // Unit tests for AppDimensions
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:Lejeepney/constants/app_dimensions.dart';
+import 'package:lejeepney/constants/app_dimensions.dart';
 
 void main() {
   group('AppDimensions', () {

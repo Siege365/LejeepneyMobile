@@ -238,3 +238,160 @@ class _TrianglePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+/// Transfer point marker (orange pin with swap icon)
+/// Shown where user alights one jeepney to board another
+class TransferPointMarker extends StatelessWidget {
+  final String? label;
+  final int transferNumber;
+
+  const TransferPointMarker({super.key, this.label, this.transferNumber = 1});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          constraints: const BoxConstraints(maxWidth: 140),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.orange[700],
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.swap_horiz, color: Colors.white, size: 14),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label ?? 'Transfer $transferNumber',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Icon(Icons.location_on, color: Colors.orange[700], size: 36),
+      ],
+    );
+  }
+}
+
+/// Boarding point marker (green pin with bus icon)
+/// Shown where user first boards a jeepney
+class BoardingPointMarker extends StatelessWidget {
+  final String? label;
+
+  const BoardingPointMarker({super.key, this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          constraints: const BoxConstraints(maxWidth: 140),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.green[700],
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.directions_bus, color: Colors.white, size: 14),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label ?? 'Board Here',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Icon(Icons.location_on, color: Colors.green[700], size: 36),
+      ],
+    );
+  }
+}
+
+/// Drop-off point marker (red pin with exit icon)
+/// Shown where user alights the last jeepney
+class DropOffPointMarker extends StatelessWidget {
+  final String? label;
+
+  const DropOffPointMarker({super.key, this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          constraints: const BoxConstraints(maxWidth: 140),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.red[700],
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.place, color: Colors.white, size: 14),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label ?? 'Drop Off',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Icon(Icons.location_on, color: Colors.red[700], size: 36),
+      ],
+    );
+  }
+}

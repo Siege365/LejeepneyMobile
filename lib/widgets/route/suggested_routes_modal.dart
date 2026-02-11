@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
+import '../../services/settings_service.dart';
 import '../../utils/transit_routing/transit_routing.dart';
 
 /// Modal widget for displaying suggested routes to a destination
@@ -379,7 +380,7 @@ class SuggestedRouteCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Walk ${(segment.distanceKm * 1000).toStringAsFixed(0)}m',
+                        'Walk ${SettingsService.instance.useMiles ? (segment.distanceKm * 0.621371 * 1000).toStringAsFixed(0) : (segment.distanceKm * 1000).toStringAsFixed(0)}${SettingsService.instance.useMiles ? 'ft' : 'm'}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -444,9 +445,61 @@ class SuggestedRouteCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                      const SizedBox(height: 4),
+                      // Board point
+                      if (segment.startName != null)
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.trip_origin,
+                              size: 10,
+                              color: Colors.green[700],
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Board: ${segment.startName}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.green[700],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      // Drop-off point
+                      if (segment.endName != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.location_on,
+                                size: 10,
+                                color: Colors.red[700],
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'Drop-off: ${segment.endName}',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.red[700],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: 2),
                       Text(
-                        '${segment.distanceKm.toStringAsFixed(1)} km • ~${segment.estimatedTimeMinutes.toStringAsFixed(0)} min',
+                        '${SettingsService.instance.formatDistance(segment.distanceKm)} • ~${segment.estimatedTimeMinutes.toStringAsFixed(0)} min',
                         style: TextStyle(fontSize: 10, color: Colors.grey[600]),
                       ),
                     ],
@@ -477,6 +530,59 @@ class SuggestedRouteCard extends StatelessWidget {
               ],
             ),
           );
+        } else if (segment.type == JourneySegmentType.transfer) {
+          // Transfer segment — walking between routes
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8, left: 4),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.orange[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange[300]!),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[100],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.swap_horiz,
+                    size: 16,
+                    color: Colors.orange[800],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Transfer — Walk ${SettingsService.instance.useMiles ? (segment.distanceKm * 0.621371 * 1000).toStringAsFixed(0) : (segment.distanceKm * 1000).toStringAsFixed(0)}${SettingsService.instance.useMiles ? 'ft' : 'm'}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.orange[900],
+                        ),
+                      ),
+                      Text(
+                        '${segment.startName ?? 'Alight'} → ${segment.endName ?? 'Board next'}',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '~${segment.estimatedTimeMinutes.toStringAsFixed(0)} min walk',
+                        style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
         }
         return const SizedBox.shrink();
       }).toList(),
@@ -494,11 +600,11 @@ class SuggestedRouteCard extends StatelessWidget {
         _SummaryItem(
           icon: Icons.directions_walk,
           text:
-              '${(route.totalWalkingDistanceKm * 1000).toStringAsFixed(0)}m walk',
+              '${SettingsService.instance.useMiles ? (route.totalWalkingDistanceKm * 0.621371 * 1000).toStringAsFixed(0) : (route.totalWalkingDistanceKm * 1000).toStringAsFixed(0)}${SettingsService.instance.useMiles ? 'ft' : 'm'} walk',
         ),
         _SummaryItem(
           icon: Icons.straighten,
-          text: '${route.totalDistanceKm.toStringAsFixed(1)} km',
+          text: SettingsService.instance.formatDistance(route.totalDistanceKm),
         ),
       ],
     );

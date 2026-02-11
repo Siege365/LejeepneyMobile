@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
+import '../utils/transit_routing/transit_routing.dart';
 import 'home/home_screen.dart';
 import 'search/search_screen.dart';
 import 'fare/fare_calculator_screen.dart';
@@ -10,6 +11,7 @@ class MainNavigation extends StatefulWidget {
   final int initialIndex;
   final int? autoSelectRouteId;
   final List<int>? autoSelectRouteIds; // New: for multiple routes
+  final SuggestedRoute? autoSelectSuggestedRoute; // New: for transfer markers
   final double? landmarkLatitude;
   final double? landmarkLongitude;
   final String? landmarkName;
@@ -19,6 +21,7 @@ class MainNavigation extends StatefulWidget {
     this.initialIndex = 0,
     this.autoSelectRouteId,
     this.autoSelectRouteIds,
+    this.autoSelectSuggestedRoute,
     this.landmarkLatitude,
     this.landmarkLongitude,
     this.landmarkName,
@@ -32,6 +35,7 @@ class _MainNavigationState extends State<MainNavigation> {
   late int _currentIndex;
   int? _autoSelectRouteId;
   List<int>? _autoSelectRouteIds;
+  SuggestedRoute? _autoSelectSuggestedRoute;
   double? _landmarkLatitude;
   double? _landmarkLongitude;
   String? _landmarkName;
@@ -43,6 +47,7 @@ class _MainNavigationState extends State<MainNavigation> {
     _currentIndex = widget.initialIndex;
     _autoSelectRouteId = widget.autoSelectRouteId;
     _autoSelectRouteIds = widget.autoSelectRouteIds;
+    _autoSelectSuggestedRoute = widget.autoSelectSuggestedRoute;
     _landmarkLatitude = widget.landmarkLatitude;
     _landmarkLongitude = widget.landmarkLongitude;
     _landmarkName = widget.landmarkName;
@@ -50,7 +55,8 @@ class _MainNavigationState extends State<MainNavigation> {
     // Increment key only if landmark data or route selection is provided
     if (_landmarkLatitude != null ||
         _autoSelectRouteId != null ||
-        _autoSelectRouteIds != null) {
+        _autoSelectRouteIds != null ||
+        _autoSelectSuggestedRoute != null) {
       _searchScreenKey++;
     }
   }
@@ -61,6 +67,7 @@ class _MainNavigationState extends State<MainNavigation> {
       key: ValueKey('search_$_searchScreenKey'),
       autoSelectRouteId: _autoSelectRouteId,
       autoSelectRouteIds: _autoSelectRouteIds,
+      autoSelectSuggestedRoute: _autoSelectSuggestedRoute,
       landmarkLatitude: _landmarkLatitude,
       landmarkLongitude: _landmarkLongitude,
       landmarkName: _landmarkName,
@@ -71,6 +78,7 @@ class _MainNavigationState extends State<MainNavigation> {
           setState(() {
             _autoSelectRouteId = null;
             _autoSelectRouteIds = null;
+            _autoSelectSuggestedRoute = null;
             _landmarkLatitude = null;
             _landmarkLongitude = null;
             _landmarkName = null;
@@ -124,7 +132,7 @@ class _MainNavigationState extends State<MainNavigation> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _buildNavItem(0, Icons.home, 'Home'),
-                _buildNavItem(1, Icons.search, 'Search'),
+                _buildNavItem(1, Icons.map_outlined, 'Search'),
                 _buildCenterNavItem(),
                 _buildNavItem(3, Icons.location_on, 'Landmarks'),
                 _buildNavItem(4, Icons.person_outline, 'Profile'),

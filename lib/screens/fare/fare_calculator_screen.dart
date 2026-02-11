@@ -3,8 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import '../../constants/app_colors.dart';
 import '../../models/jeepney_route.dart';
-import '../../services/api_service.dart';
 import '../../services/route_calculation_service.dart';
+import '../../services/fare_settings_service.dart';
+import '../../services/settings_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../utils/multi_transfer_matcher.dart';
 import '../../utils/transit_routing/transit_routing.dart';
@@ -39,7 +40,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
 
   // Service following dependency injection pattern
   final RouteCalculationService _routeCalculationService =
-      RouteCalculationService(apiService: ApiService());
+      RouteCalculationService();
 
   /// Recalculate routes after swapping points
   /// Delegates to service layer - UI only handles state updates
@@ -174,7 +175,16 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                       setState(() {
                         _mapFromArea = data['from'];
                         _mapToArea = data['to'];
-                        _calculatedFare = data['fare'];
+
+                        // Get fare from the map calculator (now always included)
+                        if (data['fare'] != null) {
+                          _calculatedFare = (data['fare'] as num).toDouble();
+                        } else if (data['distance'] != null) {
+                          // Fallback: calculate from distance
+                          final dist = (data['distance'] as num).toDouble();
+                          _calculatedFare = FareSettingsService.instance
+                              .calculateFare(dist);
+                        }
 
                         // Track fare calculation activity
                         if (_calculatedFare > 0) {
@@ -551,16 +561,16 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      '• Minimum fare: ₱13.00 (first 4km)',
-                      style: TextStyle(
+                    Text(
+                      '• Minimum fare: ₱${FareSettingsService.instance.baseFare.toStringAsFixed(2)} (first ${FareSettingsService.baseFareDistance.toInt()}km)',
+                      style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const Text(
-                      '• Additional: ₱1.80 per km',
-                      style: TextStyle(
+                    Text(
+                      '• Additional: ₱${FareSettingsService.instance.farePerKm.toStringAsFixed(2)} per km',
+                      style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textPrimary,
                       ),
@@ -894,7 +904,9 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                 children: [
                   _buildSummaryItem(
                     Icons.straighten,
-                    '${multiRoute.totalDistanceKm.toStringAsFixed(1)} km',
+                    SettingsService.instance.formatDistance(
+                      multiRoute.totalDistanceKm,
+                    ),
                   ),
                   _buildSummaryItem(
                     Icons.directions_walk,
@@ -927,30 +939,23 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
       Icons.looks_5,
     ];
 
-    final routes = suggestedRoute.routes;
-
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: routes.isNotEmpty
-            ? () {
-                // Extract all route IDs from the suggested route
-                final routeIds = routes.map((r) => r.id).toList();
-
-                // Navigate to search screen with ALL routes selected
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => MainNavigation(
-                      initialIndex: 1, // Search tab
-                      autoSelectRouteIds: routeIds, // Pass all route IDs
-                    ),
-                  ),
-                );
-              }
-            : null,
+        onTap: () {
+          // Navigate to search page with the suggested route to show transfer markers
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MainNavigation(
+                initialIndex: 1,
+                autoSelectSuggestedRoute: suggestedRoute,
+              ),
+            ),
+          );
+        },
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -1090,7 +1095,7 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Walk ${(segment.distanceKm * 1000).toStringAsFixed(0)}m',
+                                'Walk ${SettingsService.instance.useMiles ? (segment.distanceKm * 0.621371 * 1000).toStringAsFixed(0) : (segment.distanceKm * 1000).toStringAsFixed(0)}${SettingsService.instance.useMiles ? 'ft' : 'm'}',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -1158,9 +1163,61 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                              const SizedBox(height: 4),
+                              // Board point
+                              if (segment.startName != null)
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.trip_origin,
+                                      size: 10,
+                                      color: Colors.green[700],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        'Board: ${segment.startName}',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.green[700],
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              // Drop-off point
+                              if (segment.endName != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 1),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.location_on,
+                                        size: 10,
+                                        color: Colors.red[700],
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          'Drop-off: ${segment.endName}',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.red[700],
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               const SizedBox(height: 2),
                               Text(
-                                '${(segment.distanceKm).toStringAsFixed(1)} km • ~${segment.estimatedTimeMinutes.toStringAsFixed(0)} min',
+                                '${SettingsService.instance.formatDistance(segment.distanceKm)} • ~${segment.estimatedTimeMinutes.toStringAsFixed(0)} min',
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: Colors.grey[600],
@@ -1194,6 +1251,65 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                       ],
                     ),
                   );
+                } else if (segment.type == JourneySegmentType.transfer) {
+                  // Transfer segment — walking between routes
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8, left: 4),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange[300]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.orange[100],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.swap_horiz,
+                            size: 16,
+                            color: Colors.orange[800],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Transfer — Walk ${SettingsService.instance.useMiles ? (segment.distanceKm * 0.621371 * 1000).toStringAsFixed(0) : (segment.distanceKm * 1000).toStringAsFixed(0)}${SettingsService.instance.useMiles ? 'ft' : 'm'}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange[900],
+                                ),
+                              ),
+                              Text(
+                                '${segment.startName ?? 'Alight'} → ${segment.endName ?? 'Board next'}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                '~${segment.estimatedTimeMinutes.toStringAsFixed(0)} min walk',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey[500],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
                 }
                 return const SizedBox.shrink();
               }),
@@ -1208,11 +1324,13 @@ class _FareCalculatorScreenState extends State<FareCalculatorScreen> {
                   ),
                   _buildSummaryItem(
                     Icons.directions_walk,
-                    '${(suggestedRoute.totalWalkingDistanceKm * 1000).toStringAsFixed(0)}m walk',
+                    '${SettingsService.instance.useMiles ? (suggestedRoute.totalWalkingDistanceKm * 0.621371 * 1000).toStringAsFixed(0) : (suggestedRoute.totalWalkingDistanceKm * 1000).toStringAsFixed(0)}${SettingsService.instance.useMiles ? 'ft' : 'm'} walk',
                   ),
                   _buildSummaryItem(
                     Icons.straighten,
-                    '${suggestedRoute.totalDistanceKm.toStringAsFixed(1)} km',
+                    SettingsService.instance.formatDistance(
+                      suggestedRoute.totalDistanceKm,
+                    ),
                   ),
                 ],
               ),

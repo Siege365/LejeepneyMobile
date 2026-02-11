@@ -431,6 +431,14 @@ class RouteIntersection {
     return -1;
   }
 
+  /// Get the actual on-road point for a specific route at this intersection.
+  /// Returns the midpoint as fallback if the route is not part of this intersection.
+  LatLng getPointOnRoute(int routeId) {
+    if (route1.id == routeId) return point1OnRoute;
+    if (route2.id == routeId) return point2OnRoute;
+    return point; // fallback to midpoint
+  }
+
   @override
   String toString() =>
       'RouteIntersection(${route1.routeNumber} @$point1Index <-> ${route2.routeNumber} @$point2Index, ${distanceMeters.toStringAsFixed(0)}m)';

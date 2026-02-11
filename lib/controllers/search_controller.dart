@@ -60,7 +60,7 @@ class SearchController extends ChangeNotifier {
   SearchController({HybridRoutingConfig? config})
     : _hybridRouter = HybridTransitRouter(
         config:
-            config ?? const HybridRoutingConfig(maxResults: 5, maxTransfers: 3),
+            config ?? const HybridRoutingConfig(maxResults: 5, maxTransfers: 2),
       );
 
   // Getters
@@ -177,7 +177,7 @@ class SearchController extends ChangeNotifier {
 
       final response = await http.get(
         url,
-        headers: {'User-Agent': 'Lejeepney App'},
+        headers: {'User-Agent': 'LeJeepney App'},
       );
 
       if (response.statusCode == 200) {

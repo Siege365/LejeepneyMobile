@@ -7,9 +7,13 @@ import 'package:provider/single_child_widget.dart';
 import '../repositories/repositories.dart';
 import '../controllers/controllers.dart';
 import '../services/location_service.dart';
+import '../services/settings_service.dart';
 
 /// Creates all app-level providers
 List<SingleChildWidget> get appProviders => [
+  // Settings Service (centralized app settings)
+  ChangeNotifierProvider<SettingsService>(create: (_) => SettingsService()),
+
   // Core Services (singletons)
   Provider<LocationService>(create: (_) => LocationService()),
 
@@ -44,6 +48,10 @@ class AppProviderScope extends StatelessWidget {
 
 /// Extension for easy context access to repositories
 extension RepositoryContext on BuildContext {
+  /// Get SettingsService
+  SettingsService get settingsService => read<SettingsService>();
+  SettingsService watchSettings() => watch<SettingsService>();
+
   /// Get AuthRepository
   AuthRepository get authRepository => read<AuthRepository>();
   AuthRepository watchAuth() => watch<AuthRepository>();

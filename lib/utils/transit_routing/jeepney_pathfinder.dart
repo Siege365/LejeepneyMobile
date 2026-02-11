@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/jeepney_route.dart';
+import '../../services/fare_settings_service.dart';
 import 'geo_utils.dart';
 import 'models.dart';
 import 'transit_graph.dart';
@@ -390,7 +391,8 @@ class JeepneyPathfinder {
           firstRoute: originRoute,
           secondRoute: connectingRoute,
           originAccess: originAccess,
-          transferPoint: intersection.point,
+          transferAlightPoint: intersection.getPointOnRoute(originRoute.id),
+          transferBoardPoint: intersection.getPointOnRoute(connectingRoute.id),
           destAccess: destAccess,
           walkingDistance: intersection.distanceMeters,
           landmarks: landmarks,
@@ -501,9 +503,11 @@ class JeepneyPathfinder {
             route2: route2,
             route3: route3,
             originAccess: originAccess,
-            transfer1Point: intersection1.point,
+            transfer1AlightPoint: intersection1.getPointOnRoute(route1.id),
+            transfer1BoardPoint: intersection1.getPointOnRoute(route2.id),
             transfer1Walking: intersection1.distanceMeters,
-            transfer2Point: intersection2.point,
+            transfer2AlightPoint: intersection2.getPointOnRoute(route2.id),
+            transfer2BoardPoint: intersection2.getPointOnRoute(route3.id),
             transfer2Walking: intersection2.distanceMeters,
             destAccess: destAccess,
             landmarks: landmarks,
@@ -526,7 +530,8 @@ class JeepneyPathfinder {
     required JeepneyRoute firstRoute,
     required JeepneyRoute secondRoute,
     required RouteAccess originAccess,
-    required LatLng transferPoint,
+    required LatLng transferAlightPoint,
+    required LatLng transferBoardPoint,
     required RouteAccess destAccess,
     required double walkingDistance,
     List<Map<String, dynamic>>? landmarks,
@@ -562,7 +567,7 @@ class JeepneyPathfinder {
     // Segment 2: First jeepney ride
     final firstRideDistance = GeoUtils.haversineDistance(
       originAccess.accessPoint,
-      transferPoint,
+      transferAlightPoint,
     );
     final firstFare = _calculateFare(firstRoute, firstRideDistance);
 
@@ -570,10 +575,11 @@ class JeepneyPathfinder {
       JourneySegment(
         route: firstRoute,
         startPoint: originAccess.accessPoint,
-        endPoint: transferPoint,
+        endPoint: transferAlightPoint,
         startName: _findLandmarkName(originAccess.accessPoint, landmarks),
         endName:
-            _findLandmarkName(transferPoint, landmarks) ?? 'Transfer Point',
+            _findLandmarkName(transferAlightPoint, landmarks) ??
+            'Transfer Point',
         type: JourneySegmentType.jeepneyRide,
         distanceKm: firstRideDistance,
         fare: firstFare,
@@ -584,22 +590,23 @@ class JeepneyPathfinder {
     totalDistance += firstRideDistance;
     totalTime += GeoUtils.estimateJeepneyTime(firstRideDistance);
 
-    // Segment 3: Transfer walk (if needed)
+    // Segment 3: Transfer walk (always added so UI shows transfer card)
     final transferWalk = walkingDistance / 1000;
-    if (transferWalk > 0.01) {
-      segments.add(
-        JourneySegment(
-          startPoint: transferPoint,
-          endPoint: transferPoint, // Same point, just conceptual transfer
-          startName:
-              _findLandmarkName(transferPoint, landmarks) ?? 'Transfer Point',
-          endName: '${secondRoute.routeNumber} Stop',
-          type: JourneySegmentType.transfer,
-          distanceKm: transferWalk,
-          fare: 0,
-          estimatedTimeMinutes: GeoUtils.estimateWalkingTime(transferWalk),
-        ),
-      );
+    segments.add(
+      JourneySegment(
+        startPoint: transferAlightPoint,
+        endPoint: transferBoardPoint,
+        startName:
+            _findLandmarkName(transferAlightPoint, landmarks) ??
+            'Transfer Point',
+        endName: '${secondRoute.routeNumber} Stop',
+        type: JourneySegmentType.transfer,
+        distanceKm: transferWalk,
+        fare: 0,
+        estimatedTimeMinutes: GeoUtils.estimateWalkingTime(transferWalk),
+      ),
+    );
+    if (transferWalk > 0) {
       totalWalking += transferWalk;
       totalDistance += transferWalk;
       totalTime += GeoUtils.estimateWalkingTime(transferWalk);
@@ -607,7 +614,7 @@ class JeepneyPathfinder {
 
     // Segment 4: Second jeepney ride
     final secondRideDistance = GeoUtils.haversineDistance(
-      transferPoint,
+      transferBoardPoint,
       destAccess.accessPoint,
     );
     final secondFare = _calculateFare(secondRoute, secondRideDistance);
@@ -615,9 +622,9 @@ class JeepneyPathfinder {
     segments.add(
       JourneySegment(
         route: secondRoute,
-        startPoint: transferPoint,
+        startPoint: transferBoardPoint,
         endPoint: destAccess.accessPoint,
-        startName: _findLandmarkName(transferPoint, landmarks),
+        startName: _findLandmarkName(transferBoardPoint, landmarks),
         endName: _findLandmarkName(destAccess.accessPoint, landmarks),
         type: JourneySegmentType.jeepneyRide,
         distanceKm: secondRideDistance,
@@ -672,9 +679,11 @@ class JeepneyPathfinder {
     required JeepneyRoute route2,
     required JeepneyRoute route3,
     required RouteAccess originAccess,
-    required LatLng transfer1Point,
+    required LatLng transfer1AlightPoint,
+    required LatLng transfer1BoardPoint,
     required double transfer1Walking,
-    required LatLng transfer2Point,
+    required LatLng transfer2AlightPoint,
+    required LatLng transfer2BoardPoint,
     required double transfer2Walking,
     required RouteAccess destAccess,
     List<Map<String, dynamic>>? landmarks,
@@ -708,16 +717,17 @@ class JeepneyPathfinder {
     // First ride
     final ride1Distance = GeoUtils.haversineDistance(
       originAccess.accessPoint,
-      transfer1Point,
+      transfer1AlightPoint,
     );
     final fare1 = _calculateFare(route1, ride1Distance);
     segments.add(
       JourneySegment(
         route: route1,
         startPoint: originAccess.accessPoint,
-        endPoint: transfer1Point,
+        endPoint: transfer1AlightPoint,
         startName: _findLandmarkName(originAccess.accessPoint, landmarks),
-        endName: _findLandmarkName(transfer1Point, landmarks) ?? 'Transfer 1',
+        endName:
+            _findLandmarkName(transfer1AlightPoint, landmarks) ?? 'Transfer 1',
         type: JourneySegmentType.jeepneyRide,
         distanceKm: ride1Distance,
         fare: fare1,
@@ -728,22 +738,22 @@ class JeepneyPathfinder {
     totalDistance += ride1Distance;
     totalTime += GeoUtils.estimateJeepneyTime(ride1Distance);
 
-    // Transfer 1
+    // Transfer 1 (always added so UI shows transfer card)
     final transfer1Walk = transfer1Walking / 1000;
-    if (transfer1Walk > 0.01) {
-      segments.add(
-        JourneySegment(
-          startPoint: transfer1Point,
-          endPoint: transfer1Point,
-          startName:
-              _findLandmarkName(transfer1Point, landmarks) ?? 'Transfer 1',
-          endName: '${route2.routeNumber} Stop',
-          type: JourneySegmentType.transfer,
-          distanceKm: transfer1Walk,
-          fare: 0,
-          estimatedTimeMinutes: GeoUtils.estimateWalkingTime(transfer1Walk),
-        ),
-      );
+    segments.add(
+      JourneySegment(
+        startPoint: transfer1AlightPoint,
+        endPoint: transfer1BoardPoint,
+        startName:
+            _findLandmarkName(transfer1AlightPoint, landmarks) ?? 'Transfer 1',
+        endName: '${route2.routeNumber} Stop',
+        type: JourneySegmentType.transfer,
+        distanceKm: transfer1Walk,
+        fare: 0,
+        estimatedTimeMinutes: GeoUtils.estimateWalkingTime(transfer1Walk),
+      ),
+    );
+    if (transfer1Walk > 0) {
       totalWalking += transfer1Walk;
       totalDistance += transfer1Walk;
       totalTime += GeoUtils.estimateWalkingTime(transfer1Walk);
@@ -751,17 +761,18 @@ class JeepneyPathfinder {
 
     // Second ride
     final ride2Distance = GeoUtils.haversineDistance(
-      transfer1Point,
-      transfer2Point,
+      transfer1BoardPoint,
+      transfer2AlightPoint,
     );
     final fare2 = _calculateFare(route2, ride2Distance);
     segments.add(
       JourneySegment(
         route: route2,
-        startPoint: transfer1Point,
-        endPoint: transfer2Point,
-        startName: _findLandmarkName(transfer1Point, landmarks),
-        endName: _findLandmarkName(transfer2Point, landmarks) ?? 'Transfer 2',
+        startPoint: transfer1BoardPoint,
+        endPoint: transfer2AlightPoint,
+        startName: _findLandmarkName(transfer1BoardPoint, landmarks),
+        endName:
+            _findLandmarkName(transfer2AlightPoint, landmarks) ?? 'Transfer 2',
         type: JourneySegmentType.jeepneyRide,
         distanceKm: ride2Distance,
         fare: fare2,
@@ -772,22 +783,22 @@ class JeepneyPathfinder {
     totalDistance += ride2Distance;
     totalTime += GeoUtils.estimateJeepneyTime(ride2Distance);
 
-    // Transfer 2
+    // Transfer 2 (always added so UI shows transfer card)
     final transfer2Walk = transfer2Walking / 1000;
-    if (transfer2Walk > 0.01) {
-      segments.add(
-        JourneySegment(
-          startPoint: transfer2Point,
-          endPoint: transfer2Point,
-          startName:
-              _findLandmarkName(transfer2Point, landmarks) ?? 'Transfer 2',
-          endName: '${route3.routeNumber} Stop',
-          type: JourneySegmentType.transfer,
-          distanceKm: transfer2Walk,
-          fare: 0,
-          estimatedTimeMinutes: GeoUtils.estimateWalkingTime(transfer2Walk),
-        ),
-      );
+    segments.add(
+      JourneySegment(
+        startPoint: transfer2AlightPoint,
+        endPoint: transfer2BoardPoint,
+        startName:
+            _findLandmarkName(transfer2AlightPoint, landmarks) ?? 'Transfer 2',
+        endName: '${route3.routeNumber} Stop',
+        type: JourneySegmentType.transfer,
+        distanceKm: transfer2Walk,
+        fare: 0,
+        estimatedTimeMinutes: GeoUtils.estimateWalkingTime(transfer2Walk),
+      ),
+    );
+    if (transfer2Walk > 0) {
       totalWalking += transfer2Walk;
       totalDistance += transfer2Walk;
       totalTime += GeoUtils.estimateWalkingTime(transfer2Walk);
@@ -795,16 +806,16 @@ class JeepneyPathfinder {
 
     // Third ride
     final ride3Distance = GeoUtils.haversineDistance(
-      transfer2Point,
+      transfer2BoardPoint,
       destAccess.accessPoint,
     );
     final fare3 = _calculateFare(route3, ride3Distance);
     segments.add(
       JourneySegment(
         route: route3,
-        startPoint: transfer2Point,
+        startPoint: transfer2BoardPoint,
         endPoint: destAccess.accessPoint,
-        startName: _findLandmarkName(transfer2Point, landmarks),
+        startName: _findLandmarkName(transfer2BoardPoint, landmarks),
         endName: _findLandmarkName(destAccess.accessPoint, landmarks),
         type: JourneySegmentType.jeepneyRide,
         distanceKm: ride3Distance,
@@ -850,31 +861,26 @@ class JeepneyPathfinder {
   }
 
   /// Calculate fare for a route segment
-  /// Uses standard jeepney fare structure: base fare for first 4km, then ₱1.50/km
-  static const double _defaultPerKmRate = 1.50;
-  static const double _baseFareDistance = 4.0;
-
+  /// Uses admin-configured fare settings from the API
   double _calculateFare(JeepneyRoute route, double distanceKm) {
-    // Use base fare + distance-based additional fare
-    // Default: base fare covers first 4km, then additional per km
-    if (distanceKm <= _baseFareDistance) {
-      return route.baseFare;
-    }
-
-    final additionalKm = distanceKm - _baseFareDistance;
-    final additionalFare = additionalKm * _defaultPerKmRate;
-
-    return route.baseFare + additionalFare;
+    return FareSettingsService.instance.calculateFare(
+      distanceKm,
+      routeBaseFare: route.baseFare,
+    );
   }
 
   /// Find landmark name for a point
+  /// Uses a smaller search radius for more accurate location names
   String? _findLandmarkName(
     LatLng point,
     List<Map<String, dynamic>>? landmarks,
   ) {
     if (landmarks == null || landmarks.isEmpty) return null;
 
-    const maxDistance = 150.0;
+    // Reduced from 150m to 50m for more accurate location matching
+    // This prevents "People's Park" from being shown for stops that are
+    // actually on streets near the park but not at the park itself
+    const maxDistance = 50.0;
     String? nearestName;
     double nearestDistance = double.infinity;
 

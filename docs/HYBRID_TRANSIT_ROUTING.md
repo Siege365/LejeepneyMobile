@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Hybrid Transit Routing System is an advanced algorithm for the Lejeepney Flutter app that combines OSRM path validation with jeepney-based pathfinding. The system automatically falls back to a pure jeepney-based approach when OSRM-generated paths have poor coverage by actual jeepney routes.
+The Hybrid Transit Routing System is an advanced algorithm for the LeJeepney Flutter app that combines OSRM path validation with jeepney-based pathfinding. The system automatically falls back to a pure jeepney-based approach when OSRM-generated paths have poor coverage by actual jeepney routes.
 
 ## Architecture
 

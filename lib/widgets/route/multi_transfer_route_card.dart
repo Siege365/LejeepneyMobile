@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
+import '../../services/settings_service.dart';
 import '../../utils/multi_transfer_matcher.dart';
 
 class MultiTransferRouteCard extends StatelessWidget {
@@ -177,7 +178,7 @@ class MultiTransferRouteCard extends StatelessWidget {
               Icon(Icons.directions_walk, size: 16, color: Colors.grey[600]),
               const SizedBox(width: 4),
               Text(
-                '${(multiRoute.totalWalkingDistanceMeters / 1000).toStringAsFixed(1)} km walk',
+                '${SettingsService.instance.formatDistance(multiRoute.totalWalkingDistanceMeters / 1000)} walk',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ],
@@ -188,7 +189,9 @@ class MultiTransferRouteCard extends StatelessWidget {
             Icon(Icons.straighten, size: 16, color: Colors.grey[600]),
             const SizedBox(width: 4),
             Text(
-              '${multiRoute.totalDistanceKm.toStringAsFixed(1)} km',
+              SettingsService.instance.formatDistance(
+                multiRoute.totalDistanceKm,
+              ),
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],

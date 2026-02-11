@@ -1,7 +1,7 @@
 // Widget tests for common widgets
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:Lejeepney/widgets/common/common_widgets.dart';
+import 'package:lejeepney/widgets/common/common_widgets.dart';
 
 void main() {
   group('AppButton', () {

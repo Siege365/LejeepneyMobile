@@ -87,6 +87,8 @@ class JourneySegment {
   final double fare;
   final double estimatedTimeMinutes;
   final double matchPercentage; // For jeepney segments
+  final List<LatLng>?
+  walkingPath; // Road-snapped path for walking/transfer segments
 
   JourneySegment({
     this.route,
@@ -99,6 +101,7 @@ class JourneySegment {
     required this.fare,
     required this.estimatedTimeMinutes,
     this.matchPercentage = 100.0,
+    this.walkingPath,
   });
 
   bool get isWalking => type == JourneySegmentType.walking;
@@ -170,6 +173,47 @@ class SuggestedRoute {
   /// Get discount amount
   double get discountAmount => totalFare * 0.20;
 
+  /// Whether this is a direct route with no transfers
+  bool get isDirectRoute => transferCount == 0;
+
+  /// Get all transfer locations (alight points from each transfer segment)
+  List<LatLng> get transferLocations {
+    final locations = <LatLng>[];
+    for (final segment in segments) {
+      if (segment.isTransfer) {
+        locations.add(segment.startPoint); // Alight point (on prev route)
+      }
+    }
+    return locations;
+  }
+
+  /// Get the boarding point where user first gets on a jeepney
+  LatLng? get originBoardingPoint {
+    for (final segment in segments) {
+      if (segment.isJeepneyRide) return segment.startPoint;
+    }
+    return null;
+  }
+
+  /// Get the final drop-off point where user alights the last jeepney
+  LatLng? get destinationDropOff {
+    for (int i = segments.length - 1; i >= 0; i--) {
+      if (segments[i].isJeepneyRide) return segments[i].endPoint;
+    }
+    return null;
+  }
+
+  /// Get transfer alight-board pairs: [(alight point, board point)]
+  List<(LatLng alight, LatLng board)> get transferPointPairs {
+    final pairs = <(LatLng, LatLng)>[];
+    for (final segment in segments) {
+      if (segment.isTransfer) {
+        pairs.add((segment.startPoint, segment.endPoint));
+      }
+    }
+    return pairs;
+  }
+
   @override
   String toString() =>
       'SuggestedRoute($routeNames, $transferCount transfers, ₱${totalFare.toStringAsFixed(2)}, ${totalDistanceKm.toStringAsFixed(2)}km)';
@@ -232,7 +276,7 @@ class HybridRoutingConfig {
   const HybridRoutingConfig({
     this.minCoveragePercentage = 40.0,
     this.maxCoverageGapMeters = 500.0,
-    this.maxAccessWalkingMeters = 500.0,
+    this.maxAccessWalkingMeters = 1000.0,
     this.maxTransferWalkingMeters = 300.0,
     this.maxTransfers = 2,
     this.maxResults = 5,

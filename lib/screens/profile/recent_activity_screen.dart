@@ -248,15 +248,7 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      activity.subtitle ?? '',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    _buildSubtitle(activity),
                   ],
                 ),
               ),
@@ -268,6 +260,55 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSubtitle(RecentActivityModel activity) {
+    final subtitle = activity.subtitle ?? '';
+
+    // For fare_calculated, highlight the fare amounts
+    if (activity.activityType == 'fare_calculated' && subtitle.contains('₱')) {
+      // Parse the subtitle to find fare amounts
+      final parts = subtitle.split('|');
+      if (parts.length >= 2) {
+        // parts[0] = location info, parts[1] = fare info
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              parts[0].trim(),
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: parts[1].trim(),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkBlue,
+                    ),
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        );
+      }
+    }
+
+    // Default subtitle display
+    return Text(
+      subtitle,
+      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
     );
   }
 

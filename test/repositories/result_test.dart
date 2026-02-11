@@ -1,6 +1,6 @@
 // Unit tests for Result<T> class
 import 'package:flutter_test/flutter_test.dart';
-import 'package:Lejeepney/repositories/base_repository.dart';
+import 'package:lejeepney/repositories/base_repository.dart';
 
 void main() {
   group('Result<T>', () {

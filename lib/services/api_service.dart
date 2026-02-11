@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:http/http.dart' as http;
 import '../models/landmark.dart';
 import '../models/jeepney_route.dart';
+import 'fare_settings_service.dart';
 
 class ApiService {
   // ========== CONFIGURE YOUR API URL HERE ==========
@@ -407,8 +408,9 @@ class ApiService {
 
   /// Local fare calculation fallback
   FareResult _calculateFareLocally(double distance, String? discountType) {
-    const double baseFare = 13.0;
-    const double perKmRate = 1.80;
+    final fareService = FareSettingsService.instance;
+    final double baseFare = fareService.baseFare;
+    final double perKmRate = fareService.farePerKm;
     const double minimumDistance = 4.0;
 
     double fare;
@@ -434,16 +436,18 @@ class ApiService {
     );
   }
 
-  /// Fetch current fare rates
+  /// Fetch current fare rates from /settings endpoint
   Future<FareRates> fetchFareRates() async {
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl/fares/rates'), headers: _getHeaders())
+          .get(Uri.parse('$baseUrl/settings'), headers: _getHeaders())
           .timeout(_timeout);
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return FareRates.fromJson(data);
+        final body = json.decode(response.body);
+        if (body['success'] == true && body['data'] != null) {
+          return FareRates.fromJson(body['data']);
+        }
       }
 
       // Return default rates if API fails
@@ -528,7 +532,8 @@ class FareRates {
   factory FareRates.fromJson(Map<String, dynamic> json) {
     return FareRates(
       baseFare: (json['base_fare'] ?? 13.0).toDouble(),
-      perKmRate: (json['per_km_rate'] ?? 1.80).toDouble(),
+      perKmRate: (json['fare_per_km'] ?? json['per_km_rate'] ?? 1.80)
+          .toDouble(),
       studentDiscount: (json['student_discount'] ?? 20.0).toDouble(),
       seniorDiscount: (json['senior_discount'] ?? 20.0).toDouble(),
     );

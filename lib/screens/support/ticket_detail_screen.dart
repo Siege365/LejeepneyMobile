@@ -5,6 +5,7 @@ import '../../models/support_ticket.dart';
 import '../../constants/app_colors.dart';
 import '../../services/support_service.dart';
 import '../../services/recent_activity_service_v2.dart';
+import '../../services/settings_service.dart';
 
 /// Screen to display ticket details and real-time conversation chat
 /// Supports auto-refresh polling for new admin messages
@@ -125,6 +126,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
 
   void _showNewMessageNotification() {
     if (!mounted) return;
+    if (!SettingsService.instance.shouldShowTicketNotifications) return;
+    SettingsService.instance.triggerNotificationFeedback();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Row(
@@ -150,6 +153,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
 
   void _showStatusChangeNotification(TicketStatus newStatus) {
     if (!mounted) return;
+    if (!SettingsService.instance.shouldShowTicketNotifications) return;
+    SettingsService.instance.triggerNotificationFeedback();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(

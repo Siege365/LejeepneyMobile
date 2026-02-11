@@ -1,67 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
+import '../../services/settings_service.dart';
+import '../../services/localization_service.dart';
 import '../../widgets/common/tutorial_overlay.dart';
 
-/// Screen for general app settings - Industry standard layout
-class SettingsScreen extends StatefulWidget {
+/// Settings screen — reads/writes via [SettingsService] provider.
+/// No local state duplication; every toggle directly updates the service.
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  // General settings
-  String _selectedLanguage = 'English';
-  String _selectedDistanceUnit = 'Kilometers';
-  bool _darkMode = false;
-
-  // Notification settings (moved from notifications page)
-  bool _pushNotifications = true;
-  bool _routeUpdates = true;
-  bool _fareChanges = true;
-  bool _supportTicketUpdates = true;
-  bool _promotions = false;
-  bool _soundEnabled = true;
-  bool _vibration = true;
-
-  // Data & Network settings
-  bool _offlineMode = false;
-  bool _dataOptimization = true;
-  bool _locationServices = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _pushNotifications = prefs.getBool('push_notifications') ?? true;
-      _routeUpdates = prefs.getBool('route_updates') ?? true;
-      _fareChanges = prefs.getBool('fare_changes') ?? true;
-      _supportTicketUpdates = prefs.getBool('support_ticket_updates') ?? true;
-      _promotions = prefs.getBool('promotions') ?? false;
-      _soundEnabled = prefs.getBool('sound_enabled') ?? true;
-      _vibration = prefs.getBool('vibration') ?? true;
-      _darkMode = prefs.getBool('dark_mode') ?? false;
-      _offlineMode = prefs.getBool('offline_mode') ?? false;
-      _dataOptimization = prefs.getBool('data_optimization') ?? true;
-      _locationServices = prefs.getBool('location_services') ?? true;
-    });
-  }
-
-  Future<void> _saveSetting(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsService>();
+    final String lang = settings.language;
+
+    // Translation helper
+    String t(String key) => LocalizationService.translate(key, lang);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
@@ -72,7 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Settings',
+          t('settings'),
           style: GoogleFonts.slackey(
             fontSize: 20,
             color: AppColors.textPrimary,
@@ -85,66 +42,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // NOTIFICATIONS SECTION (Moved from Notifications page)
-            _buildSectionHeader('Notifications'),
+            _buildSectionHeader(t('notifications')),
             const SizedBox(height: 12),
             _buildSettingsCard([
               _buildSwitchTile(
                 icon: Icons.notifications_active,
-                title: 'Push Notifications',
+                title: t('push_notifications'),
                 subtitle: 'Receive push notifications',
-                value: _pushNotifications,
-                onChanged: (value) {
-                  setState(() => _pushNotifications = value);
-                  _saveSetting('push_notifications', value);
-                },
-              ),
-              _buildDivider(),
-              _buildSwitchTile(
-                icon: Icons.route,
-                title: 'Route Updates',
-                subtitle: 'Get notified about route changes',
-                value: _routeUpdates,
-                enabled: _pushNotifications,
-                onChanged: (value) {
-                  setState(() => _routeUpdates = value);
-                  _saveSetting('route_updates', value);
-                },
-              ),
-              _buildDivider(),
-              _buildSwitchTile(
-                icon: Icons.attach_money,
-                title: 'Fare Changes',
-                subtitle: 'Notifications about fare updates',
-                value: _fareChanges,
-                enabled: _pushNotifications,
-                onChanged: (value) {
-                  setState(() => _fareChanges = value);
-                  _saveSetting('fare_changes', value);
-                },
+                value: settings.pushNotifications,
+                onChanged: (v) => settings.setPushNotifications(v),
               ),
               _buildDivider(),
               _buildSwitchTile(
                 icon: Icons.confirmation_number,
-                title: 'Support Ticket Updates',
+                title: t('ticket_updates'),
                 subtitle: 'Get notified when tickets are replied',
-                value: _supportTicketUpdates,
-                enabled: _pushNotifications,
-                onChanged: (value) {
-                  setState(() => _supportTicketUpdates = value);
-                  _saveSetting('support_ticket_updates', value);
-                },
-              ),
-              _buildDivider(),
-              _buildSwitchTile(
-                icon: Icons.local_offer,
-                title: 'Promotions',
-                subtitle: 'Receive promotional messages',
-                value: _promotions,
-                enabled: _pushNotifications,
-                onChanged: (value) {
-                  setState(() => _promotions = value);
-                  _saveSetting('promotions', value);
-                },
+                value: settings.supportTicketUpdates,
+                enabled: settings.pushNotifications,
+                onChanged: (v) => settings.setSupportTicketUpdates(v),
               ),
             ]),
             const SizedBox(height: 24),
@@ -155,121 +70,96 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingsCard([
               _buildSwitchTile(
                 icon: Icons.volume_up,
-                title: 'Sound',
+                title: t('sound'),
                 subtitle: 'Play sound for notifications',
-                value: _soundEnabled,
-                onChanged: (value) {
-                  setState(() => _soundEnabled = value);
-                  _saveSetting('sound_enabled', value);
-                },
+                value: settings.soundEnabled,
+                onChanged: (v) => settings.setSoundEnabled(v),
               ),
               _buildDivider(),
               _buildSwitchTile(
                 icon: Icons.vibration,
-                title: 'Vibration',
+                title: t('vibration'),
                 subtitle: 'Vibrate for notifications',
-                value: _vibration,
-                onChanged: (value) {
-                  setState(() => _vibration = value);
-                  _saveSetting('vibration', value);
+                value: settings.vibration,
+                onChanged: (v) {
+                  settings.setVibration(v);
+                  if (v) settings.triggerVibration();
                 },
               ),
             ]),
             const SizedBox(height: 24),
 
             // General Settings
-            _buildSectionHeader('General'),
+            _buildSectionHeader(t('general')),
             const SizedBox(height: 12),
             _buildSettingsCard([
               _buildDropdownTile(
                 icon: Icons.language,
-                title: 'Language',
-                value: _selectedLanguage,
-                items: ['English', 'Filipino', 'Cebuano'],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedLanguage = value);
+                title: t('language'),
+                value: settings.language,
+                items: const ['English', 'Filipino', 'Cebuano'],
+                onChanged: (v) {
+                  if (v != null) {
+                    settings.setLanguage(v);
+                    final newT = (String key) =>
+                        LocalizationService.translate(key, v);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${newT('language_set_to')} $v'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
                   }
                 },
               ),
               _buildDivider(),
               _buildDropdownTile(
                 icon: Icons.straighten,
-                title: 'Distance Unit',
-                value: _selectedDistanceUnit,
-                items: ['Kilometers', 'Miles'],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedDistanceUnit = value);
+                title: t('distance_unit'),
+                value: t(
+                  settings.distanceUnit.toLowerCase(),
+                ), // Translate current value
+                items: [t('kilometers'), t('miles')],
+                onChanged: (v) {
+                  if (v != null) {
+                    // Map translated value back to English for storage
+                    String actualValue = v == t('kilometers')
+                        ? 'Kilometers'
+                        : 'Miles';
+                    settings.setDistanceUnit(actualValue);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${t('distances_shown_in')} $v'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
                   }
                 },
               ),
             ]),
             const SizedBox(height: 24),
 
-            // Display
-            _buildSectionHeader('Display'),
-            const SizedBox(height: 12),
-            _buildSettingsCard([
-              _buildSwitchTile(
-                icon: Icons.dark_mode,
-                title: 'Dark Mode',
-                subtitle: 'Use dark theme',
-                value: _darkMode,
-                onChanged: (value) {
-                  setState(() => _darkMode = value);
-                  _saveSetting('dark_mode', value);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Dark mode coming soon!'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
-              ),
-            ]),
-            const SizedBox(height: 24),
-
-            // Data & Network
-            _buildSectionHeader('Data & Network'),
-            const SizedBox(height: 12),
-            _buildSettingsCard([
-              _buildSwitchTile(
-                icon: Icons.cloud_off,
-                title: 'Offline Mode',
-                subtitle: 'Use cached data when offline',
-                value: _offlineMode,
-                onChanged: (value) {
-                  setState(() => _offlineMode = value);
-                  _saveSetting('offline_mode', value);
-                },
-              ),
-              _buildDivider(),
-              _buildSwitchTile(
-                icon: Icons.data_saver_on,
-                title: 'Data Optimization',
-                subtitle: 'Reduce data usage',
-                value: _dataOptimization,
-                onChanged: (value) {
-                  setState(() => _dataOptimization = value);
-                  _saveSetting('data_optimization', value);
-                },
-              ),
-            ]),
-            const SizedBox(height: 24),
-
             // Location
-            _buildSectionHeader('Location'),
+            _buildSectionHeader(t('privacy')),
             const SizedBox(height: 12),
             _buildSettingsCard([
               _buildSwitchTile(
                 icon: Icons.location_on,
-                title: 'Location Services',
+                title: t('location_services'),
                 subtitle: 'Allow app to access your location',
-                value: _locationServices,
-                onChanged: (value) {
-                  setState(() => _locationServices = value);
-                  _saveSetting('location_services', value);
+                value: settings.locationServices,
+                onChanged: (v) {
+                  settings.setLocationServices(v);
+                  if (!v) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Location disabled — distances won\'t be calculated',
+                        ),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
                 },
               ),
             ]),
@@ -281,16 +171,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingsCard([
               _buildActionTile(
                 icon: Icons.cleaning_services,
-                title: 'Clear Cache',
+                title: t('clear_cache'),
                 subtitle: 'Free up storage space',
-                onTap: _showClearCacheDialog,
+                onTap: () => _showClearCacheDialog(context, settings),
               ),
               const Divider(height: 1),
               _buildActionTile(
                 icon: Icons.play_circle_outline,
                 title: 'Replay Tutorial',
                 subtitle: 'Watch the app introduction again',
-                onTap: _replayTutorial,
+                onTap: () => _replayTutorial(context),
               ),
             ]),
             const SizedBox(height: 32),
@@ -303,7 +193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildSectionHeader(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: GoogleFonts.slackey(
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: AppColors.darkBlue,
@@ -500,35 +390,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return const Divider(height: 1, indent: 72, endIndent: 16);
   }
 
-  void _showClearCacheDialog() {
+  void _showClearCacheDialog(BuildContext context, SettingsService settings) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Clear Cache'),
         content: const Text(
-          'This will clear all cached data including offline maps and route history. Continue?',
+          'This will clear all cached data including images and route history. Your settings will be preserved. Continue?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Row(
                     children: [
-                      Icon(Icons.check_circle, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text('Cache cleared successfully'),
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Clearing cache...'),
                     ],
                   ),
-                  backgroundColor: AppColors.success,
+                  duration: Duration(seconds: 2),
                 ),
               );
+
+              await settings.clearCache();
+              await Future.delayed(const Duration(milliseconds: 500));
+
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('Cache cleared successfully'),
+                      ],
+                    ),
+                    backgroundColor: AppColors.success,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
             },
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Clear'),
@@ -538,7 +455,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _replayTutorial() {
+  void _replayTutorial(BuildContext context) {
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,

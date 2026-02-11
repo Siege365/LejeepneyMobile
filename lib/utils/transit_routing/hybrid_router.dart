@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/jeepney_route.dart';
+import '../../services/fare_settings_service.dart';
 import 'geo_utils.dart';
 import 'jeepney_pathfinder.dart';
 import 'models.dart';
@@ -378,26 +379,24 @@ class HybridTransitRouter {
   }
 
   /// Calculate fare for a route
-  /// Uses standard jeepney fare structure: base fare for first 4km, then ₱1.50/km
-  static const double _defaultPerKmRate = 1.50;
-  static const double _baseFareDistance = 4.0;
-
+  /// Uses admin-configured fare settings from the API
   double _calculateFare(JeepneyRoute route, double distanceKm) {
-    if (distanceKm <= _baseFareDistance) {
-      return route.baseFare;
-    }
-    final additionalKm = distanceKm - _baseFareDistance;
-    return route.baseFare + (additionalKm * _defaultPerKmRate);
+    return FareSettingsService.instance.calculateFare(
+      distanceKm,
+      routeBaseFare: route.baseFare,
+    );
   }
 
   /// Find landmark name near a point
+  /// Uses a smaller search radius for more accurate location names
   String? _findLandmarkName(
     LatLng point,
     List<Map<String, dynamic>>? landmarks,
   ) {
     if (landmarks == null || landmarks.isEmpty) return null;
 
-    const maxDistance = 150.0;
+    // Reduced from 150m to 50m for more accurate location matching
+    const maxDistance = 50.0;
     String? nearestName;
     double nearestDistance = double.infinity;
 

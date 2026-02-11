@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
-import '../services/auth_service.dart';
+import '../repositories/repositories.dart';
+import '../services/app_data_preloader.dart';
 import '../utils/page_transitions.dart';
 import 'auth/login_screen.dart';
 import 'main_navigation.dart';
@@ -13,46 +15,33 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final _authService = AuthService();
-
   @override
   void initState() {
     super.initState();
-    _checkAuthAndNavigate();
+    _initializeAndNavigate();
   }
 
-  Future<void> _checkAuthAndNavigate() async {
-    // Minimal delay - just show splash briefly
-    await Future.delayed(const Duration(milliseconds: 800));
+  Future<void> _initializeAndNavigate() async {
+    // Pre-load all data in parallel while splash is showing
+    final routeRepo = context.read<RouteRepository>();
+    final landmarkRepo = context.read<LandmarkRepository>();
+    final authRepo = context.read<AuthRepository>();
+
+    await AppDataPreloader.instance.initialize(
+      routeRepository: routeRepo,
+      landmarkRepository: landmarkRepo,
+      authRepository: authRepo,
+    );
 
     if (!mounted) return;
 
-    // Check if user has a valid session
-    final isLoggedIn = await _authService.isLoggedIn();
-
-    if (!mounted) return;
-
-    if (isLoggedIn) {
-      // User is logged in - validate session with server
-      final user = await _authService.getCurrentUser();
-
-      if (!mounted) return;
-
-      if (user != null) {
-        // Valid session - go to home
-        Navigator.pushReplacement(
-          context,
-          FadeRoute(page: const MainNavigation()),
-        );
-      } else {
-        // Invalid token - go to login
-        Navigator.pushReplacement(
-          context,
-          FadeRoute(page: const LoginScreen()),
-        );
-      }
+    // Navigate based on auth state (already loaded by preloader)
+    if (authRepo.isAuthenticated) {
+      Navigator.pushReplacement(
+        context,
+        FadeRoute(page: const MainNavigation()),
+      );
     } else {
-      // Not logged in - go to login
       Navigator.pushReplacement(context, FadeRoute(page: const LoginScreen()));
     }
   }

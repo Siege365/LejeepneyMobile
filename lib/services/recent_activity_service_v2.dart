@@ -47,9 +47,22 @@ class RecentActivityServiceV2 {
     String? routeName,
     double? distance,
   }) async {
-    final subtitle = routeName != null
-        ? '₱${fare.toStringAsFixed(2)} - $routeName'
-        : '₱${fare.toStringAsFixed(2)}';
+    // Shorten location names for display (take first part before comma)
+    String shortenLocation(String loc) {
+      if (loc.length <= 20) return loc;
+      final parts = loc.split(',');
+      if (parts.isNotEmpty) {
+        final first = parts.first.trim();
+        return first.length > 20 ? '${first.substring(0, 17)}...' : first;
+      }
+      return '${loc.substring(0, 17)}...';
+    }
+
+    final shortFrom = shortenLocation(fromLocation);
+    final shortTo = shortenLocation(toLocation);
+    final discountFare = fare * 0.8; // 20% discount
+    final subtitle =
+        '$shortFrom → $shortTo | ₱${fare.toStringAsFixed(2)} (₱${discountFare.toStringAsFixed(2)} w/ discount)';
 
     await _syncManager.track(
       activityType: 'fare_calculated',

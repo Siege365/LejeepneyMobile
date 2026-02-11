@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Main brand colors (Lejeepney)
+  // Main brand colors (LeJeepney)
   static const Color primary = Color(
     0xFFEBAF3E,
   ); // Orange/Golden - main background

@@ -54,7 +54,7 @@ class AboutScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Jeepney Navigator',
+              'LeJeepney',
               style: GoogleFonts.slackey(
                 fontSize: 24,
                 color: AppColors.darkBlue,
@@ -78,7 +78,7 @@ class AboutScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Jeepney Navigator helps commuters find the best routes using public jeepney transportation. Plan your journey, calculate fares, and navigate the city with ease.',
+                    'LeJeepney is your comprehensive guide to navigating Davao City using public jeepney transportation. Discover optimal routes with real-time navigation, book tickets seamlessly, explore landmarks, and calculate fares accurately. Built for Filipino commuters who need reliable, offline-capable transit assistance.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -100,14 +100,27 @@ class AboutScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
-                  _buildFeatureItem(Icons.route, 'Multi-route suggestions'),
-                  _buildFeatureItem(Icons.calculate, 'Fare calculator'),
-                  _buildFeatureItem(Icons.map, 'Interactive map'),
+                  _buildFeatureItem(Icons.route, 'Smart multi-route planning'),
+                  _buildFeatureItem(
+                    Icons.calculate,
+                    'Accurate fare calculator',
+                  ),
+                  _buildFeatureItem(Icons.map, 'Interactive real-time map'),
+                  _buildFeatureItem(
+                    Icons.confirmation_number,
+                    'Ticket booking & history',
+                  ),
+                  _buildFeatureItem(
+                    Icons.location_on,
+                    'Landmarks & POI discovery',
+                  ),
                   _buildFeatureItem(
                     Icons.directions_walk,
-                    'Walking directions',
+                    'Walking & transit directions',
                   ),
-                  _buildFeatureItem(Icons.offline_bolt, 'Offline support'),
+                  _buildFeatureItem(Icons.settings, 'Customizable preferences'),
+                  _buildFeatureItem(Icons.translate, 'Multi-language support'),
+                  _buildFeatureItem(Icons.offline_bolt, 'Offline route data'),
                 ],
               ),
             ),
@@ -124,7 +137,7 @@ class AboutScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Developed as a final project for CCE106 - Mobile Application Development.',
+                    'Developed as a final project for CCE106 - Mobile Application Development. This app demonstrates modern Flutter development practices including state management, real-time location services, complex routing algorithms, and offline-first architecture.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.5,
@@ -164,7 +177,7 @@ class AboutScreen extends StatelessWidget {
 
             // Copyright
             Text(
-              '© 2025 Jeepney Navigator',
+              '© 2026 LeJeepney',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
             ),
             const SizedBox(height: 8),
@@ -262,7 +275,7 @@ class AboutScreen extends StatelessWidget {
   void _showLicenses(BuildContext context) {
     showLicensePage(
       context: context,
-      applicationName: 'Jeepney Navigator',
+      applicationName: 'LeJeepney',
       applicationVersion: '1.0.0',
       applicationIcon: Container(
         width: 60,

@@ -6,25 +6,30 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/map_constants.dart';
 import '../../widgets/map/map_markers.dart';
 import '../../widgets/route/route_display_widgets.dart';
 import '../../widgets/route/suggested_routes_modal.dart';
 import '../../widgets/route/routes_list_panel.dart';
-import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../services/recent_activity_service_v2.dart';
+import '../../services/app_data_preloader.dart';
+import '../../repositories/route_repository.dart';
 import '../../models/jeepney_route.dart';
 import '../../utils/transit_routing/transit_routing.dart';
 import '../../utils/resilient_tile_provider.dart';
+import '../../services/walking_route_service.dart';
 
 class SearchScreen extends StatefulWidget {
   final int? autoSelectRouteId;
   final List<int>? autoSelectRouteIds;
+  final SuggestedRoute? autoSelectSuggestedRoute;
   final double? landmarkLatitude;
   final double? landmarkLongitude;
   final String? landmarkName;
@@ -34,6 +39,7 @@ class SearchScreen extends StatefulWidget {
     super.key,
     this.autoSelectRouteId,
     this.autoSelectRouteIds,
+    this.autoSelectSuggestedRoute,
     this.landmarkLatitude,
     this.landmarkLongitude,
     this.landmarkName,
@@ -51,11 +57,8 @@ class _SearchScreenState extends State<SearchScreen> {
   final FocusNode _searchFocusNode = FocusNode();
 
   // Services
-  final ApiService _apiService = ApiService();
   final LocationService _locationService = LocationService();
-  final HybridTransitRouter _hybridRouter = HybridTransitRouter(
-    config: const HybridRoutingConfig(maxResults: 5, maxTransfers: 3),
-  );
+  late final HybridTransitRouter _hybridRouter;
 
   // Location state
   LatLng? _currentLocation;
@@ -82,11 +85,19 @@ class _SearchScreenState extends State<SearchScreen> {
   // Routing state
   bool _isCalculatingRoute = false;
   List<SuggestedRoute> _calculatedRoutes = [];
+  SuggestedRoute? _selectedSuggestedRoute;
+  Map<int, List<LatLng>> _walkingPaths =
+      {}; // segment index → road-snapped path
+  LatLng? _pointA; // Origin point
+  LatLng? _pointB; // Destination point
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+
+    // Use pre-loaded transit router from preloader
+    _hybridRouter = AppDataPreloader.instance.hybridRouter;
 
     // Start initialization immediately without blocking
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -185,42 +196,55 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      final routes = await _apiService.fetchAllRoutes();
-      if (mounted) {
-        routes.sort((a, b) => a.name.compareTo(b.name));
+      // Use RouteRepository (data is pre-loaded during splash)
+      final routeRepo = context.read<RouteRepository>();
+
+      if (routeRepo.hasRoutes) {
+        // Routes already cached from preloader — instant load
         setState(() {
-          _routes = routes;
-          // Keep loading state while building graph
+          _routes = routeRepo.routes;
+          _isLoadingRoutes = false;
         });
-
-        // Pre-initialize the routing graph in the background
-        // This makes subsequent route calculations faster
-        debugPrint('[SearchScreen] Pre-building transit graph...');
-        await _hybridRouter.preInitialize(routes: routes);
-        debugPrint('[SearchScreen] Graph pre-build complete');
-
+        debugPrint('[SearchScreen] Using ${_routes.length} pre-loaded routes');
+      } else {
+        // Fallback: fetch from API through repository
+        final result = await routeRepo.fetchAllRoutes();
         if (mounted) {
-          setState(() {
-            _isLoadingRoutes = false;
-          });
+          if (result.isSuccess && result.data != null) {
+            setState(() {
+              _routes = result.data!;
+              _isLoadingRoutes = false;
+            });
+            debugPrint(
+              '[SearchScreen] Fetched ${_routes.length} routes via repository',
+            );
+          } else {
+            setState(() {
+              _isLoadingRoutes = false;
+              _routesErrorMessage = result.error ?? 'Failed to load routes';
+            });
+          }
         }
       }
-    } catch (e) {
-      debugPrint('Routes API Error: $e');
-      if (mounted) {
-        final errorMsg = e.toString().contains('ApiException')
-            ? e.toString().replaceAll('ApiException: ', '')
-            : 'Failed to load routes. Please check your internet connection.';
 
+      // Ensure transit graph is initialized
+      if (_routes.isNotEmpty && !AppDataPreloader.instance.isInitialized) {
+        debugPrint('[SearchScreen] Pre-building transit graph...');
+        await _hybridRouter.preInitialize(routes: _routes);
+        debugPrint('[SearchScreen] Graph pre-build complete');
+      }
+    } catch (e) {
+      debugPrint('Routes Error: $e');
+      if (mounted) {
         setState(() {
           _isLoadingRoutes = false;
-          _routesErrorMessage = errorMsg;
+          _routesErrorMessage =
+              'Failed to load routes. Please check your internet connection.';
         });
 
-        // Show snackbar with error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(errorMsg),
+            content: Text(_routesErrorMessage!),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
             action: SnackBarAction(
@@ -239,7 +263,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
     if (widget.autoSelectRouteId == null &&
         (widget.autoSelectRouteIds == null ||
-            widget.autoSelectRouteIds!.isEmpty)) {
+            widget.autoSelectRouteIds!.isEmpty) &&
+        widget.autoSelectSuggestedRoute == null) {
       return;
     }
 
@@ -252,7 +277,35 @@ class _SearchScreenState extends State<SearchScreen> {
     if (!mounted) return;
 
     setState(() {
-      if (widget.autoSelectRouteIds != null &&
+      // Clear previous routes and markers before selecting new ones
+      _visibleRouteIds.clear();
+      _selectedSuggestedRoute = null;
+      _walkingPaths = {};
+      _pointA = null;
+      _pointB = null;
+
+      // Priority: SuggestedRoute with transfer markers
+      if (widget.autoSelectSuggestedRoute != null) {
+        final suggestedRoute = widget.autoSelectSuggestedRoute!;
+        final routeIds = suggestedRoute.routes.map((r) => r.id).toList();
+        _visibleRouteIds.addAll(routeIds);
+        _showRoutesList = true;
+        _selectedSuggestedRoute = suggestedRoute;
+
+        // Extract Point A and Point B from the route
+        if (suggestedRoute.segments.isNotEmpty) {
+          _pointA = suggestedRoute.segments.first.startPoint;
+          _pointB = suggestedRoute.segments.last.endPoint;
+        }
+
+        // Fetch walking paths for the route
+        _fetchWalkingPaths(suggestedRoute);
+
+        // Fit map to show the suggested route
+        _fitMapToSuggestedRoute(suggestedRoute);
+      }
+      // Multiple route IDs
+      else if (widget.autoSelectRouteIds != null &&
           widget.autoSelectRouteIds!.isNotEmpty) {
         _visibleRouteIds.addAll(widget.autoSelectRouteIds!);
         _showRoutesList = true;
@@ -263,7 +316,9 @@ class _SearchScreenState extends State<SearchScreen> {
         if (selectedRoutes.isNotEmpty) {
           _fitMapToRoutes(selectedRoutes);
         }
-      } else if (widget.autoSelectRouteId != null) {
+      }
+      // Single route ID
+      else if (widget.autoSelectRouteId != null) {
         final route = _routes.firstWhere(
           (r) => r.id == widget.autoSelectRouteId,
           orElse: () => _routes.first,
@@ -339,6 +394,20 @@ class _SearchScreenState extends State<SearchScreen> {
         }
       } else {
         _visibleRouteIds.remove(route.id);
+        // Clear all suggested route state when any member route is untoggled
+        // This matches fare calculator behavior — untoggling breaks the journey
+        if (_selectedSuggestedRoute != null) {
+          final suggestedRouteIds = _selectedSuggestedRoute!.routes
+              .map((r) => r.id)
+              .toSet();
+          if (suggestedRouteIds.contains(route.id)) {
+            _visibleRouteIds.removeAll(suggestedRouteIds);
+            _selectedSuggestedRoute = null;
+            _walkingPaths = {};
+            _pointA = null;
+            _pointB = null;
+          }
+        }
       }
     });
   }
@@ -357,6 +426,36 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _fitMapToRoutes(List<JeepneyRoute> routes) {
     final allPoints = routes.expand((r) => r.path).toList();
+    if (allPoints.isEmpty) return;
+
+    final bounds = _calculateBounds(allPoints);
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.all(MapConstants.routePadding),
+      ),
+    );
+  }
+
+  void _fitMapToSuggestedRoute(SuggestedRoute suggestedRoute) {
+    final allPoints = <LatLng>[];
+
+    // Collect all start and end points from segments
+    for (final segment in suggestedRoute.segments) {
+      allPoints.add(segment.startPoint);
+      allPoints.add(segment.endPoint);
+
+      // Include walking path points if available
+      if (segment.walkingPath != null) {
+        allPoints.addAll(segment.walkingPath!);
+      }
+
+      // Include route path points for jeepney segments
+      if (segment.route != null) {
+        allPoints.addAll(segment.route!.path);
+      }
+    }
+
     if (allPoints.isEmpty) return;
 
     final bounds = _calculateBounds(allPoints);
@@ -446,6 +545,9 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _handleMapLongPress(LatLng point) async {
+    // Vibrate to indicate pinpoint placed
+    HapticFeedback.mediumImpact();
+
     try {
       final result = await _locationService.reverseGeocode(point);
 
@@ -622,20 +724,70 @@ class _SearchScreenState extends State<SearchScreen> {
 
     if (jeepneyRoutes.isEmpty) return;
 
-    setState(() {
-      final routeIds = jeepneyRoutes.map((r) => r.id).toSet();
-      final allVisible = routeIds.every((id) => _visibleRouteIds.contains(id));
+    final newRouteIds = jeepneyRoutes.map((r) => r.id).toSet();
 
-      if (allVisible) {
-        _visibleRouteIds.removeAll(routeIds);
-      } else {
-        _visibleRouteIds.addAll(routeIds);
-      }
+    // Check if tapping the same route (toggle off)
+    final isSameRoute = _selectedSuggestedRoute?.id == route.id;
+
+    setState(() {
+      // Always clear previous display first (auto-clear like fare calculator)
+      _visibleRouteIds.clear();
+      _selectedSuggestedRoute = null;
+      _walkingPaths = {};
+      _pointA = null;
+      _pointB = null;
+
+      // If same route was tapped, just toggle off (already cleared above)
+      if (isSameRoute) return;
+
+      // Display the new route
+      _selectedSuggestedRoute = route;
+      _visibleRouteIds.addAll(newRouteIds);
+      // Note: Point A/B markers are NOT set here — they only appear
+      // when navigating from the fare calculator (autoSelectSuggestedRoute)
     });
 
     if (_visibleRouteIds.isNotEmpty) {
       _fitMapToRoutes(jeepneyRoutes);
     }
+
+    // Fetch walking paths for the new route
+    if (_selectedSuggestedRoute != null) {
+      _fetchWalkingPaths(_selectedSuggestedRoute!);
+    }
+  }
+
+  /// Fetch road-snapped walking paths for all walking/transfer segments
+  Future<void> _fetchWalkingPaths(SuggestedRoute route) async {
+    final walkingSegments = <int, (LatLng, LatLng)>{};
+
+    for (int i = 0; i < route.segments.length; i++) {
+      final seg = route.segments[i];
+      if ((seg.isWalking || seg.isTransfer) && seg.startPoint != seg.endPoint) {
+        walkingSegments[i] = (seg.startPoint, seg.endPoint);
+      }
+    }
+
+    if (walkingSegments.isEmpty) return;
+
+    final paths = await WalkingRouteService.fetchWalkingPathsBatch(
+      walkingSegments.values.toList(),
+    );
+
+    if (!mounted || _selectedSuggestedRoute?.id != route.id) return;
+
+    // Map batch results back to segment indices
+    final indexedPaths = <int, List<LatLng>>{};
+    final segIndices = walkingSegments.keys.toList();
+    for (final entry in paths.entries) {
+      if (entry.key < segIndices.length) {
+        indexedPaths[segIndices[entry.key]] = entry.value;
+      }
+    }
+
+    setState(() {
+      _walkingPaths = indexedPaths;
+    });
   }
 
   void _clearSearch() {
@@ -647,6 +799,10 @@ class _SearchScreenState extends State<SearchScreen> {
         _searchController.clear();
         _currentAddress = _originalLocationAddress;
         _visibleRouteIds.clear();
+        _selectedSuggestedRoute = null;
+        _walkingPaths = {};
+        _pointA = null;
+        _pointB = null;
       });
     }
   }
@@ -693,6 +849,94 @@ class _SearchScreenState extends State<SearchScreen> {
         ],
       ),
     );
+  }
+
+  // ========== TRANSFER MARKERS & WALKING POLYLINES ==========
+
+  /// Build markers for boarding, transfer, and drop-off points
+  List<Marker> _buildTransferMarkers() {
+    final markers = <Marker>[];
+    final route = _selectedSuggestedRoute!;
+
+    // Boarding point (green) — where user first gets on a jeepney
+    final boarding = route.originBoardingPoint;
+    if (boarding != null) {
+      markers.add(
+        Marker(
+          point: boarding,
+          width: 160,
+          height: 60,
+          alignment: Alignment.topCenter,
+          child: const BoardingPointMarker(label: 'Board Here'),
+        ),
+      );
+    }
+
+    // Transfer points (orange) — where user switches jeepneys
+    final transferPairs = route.transferPointPairs;
+    for (int i = 0; i < transferPairs.length; i++) {
+      final (alight, _) = transferPairs[i];
+      markers.add(
+        Marker(
+          point: alight,
+          width: 160,
+          height: 60,
+          alignment: Alignment.topCenter,
+          child: TransferPointMarker(
+            transferNumber: i + 1,
+            label: 'Transfer ${i + 1}',
+          ),
+        ),
+      );
+    }
+
+    // Drop-off point (red) — where user alights the last jeepney
+    final dropOff = route.destinationDropOff;
+    if (dropOff != null) {
+      markers.add(
+        Marker(
+          point: dropOff,
+          width: 160,
+          height: 60,
+          alignment: Alignment.topCenter,
+          child: const DropOffPointMarker(label: 'Drop Off'),
+        ),
+      );
+    }
+
+    return markers;
+  }
+
+  /// Build dashed polylines for walking segments (to transfer & from drop-off)
+  /// Uses OSRM road-snapped paths when available, falls back to straight lines
+  List<Polyline> _buildWalkingPolylines() {
+    final polylines = <Polyline>[];
+    final route = _selectedSuggestedRoute!;
+
+    for (int i = 0; i < route.segments.length; i++) {
+      final segment = route.segments[i];
+      if (segment.isTransfer || segment.isWalking) {
+        // Use road-snapped path if available, otherwise straight line
+        final points =
+            _walkingPaths[i] ??
+            (segment.startPoint != segment.endPoint
+                ? [segment.startPoint, segment.endPoint]
+                : null);
+
+        if (points != null && points.length >= 2) {
+          polylines.add(
+            Polyline(
+              points: points,
+              strokeWidth: 3.0,
+              color: Colors.grey[600]!,
+              isDotted: true,
+            ),
+          );
+        }
+      }
+    }
+
+    return polylines;
   }
 
   // ========== MAP WIDGET ==========
@@ -765,6 +1009,38 @@ class _SearchScreenState extends State<SearchScreen> {
                   .expand((route) => RouteEndpointMarkers.build(route))
                   .toList(),
             ),
+          // Point A and Point B markers
+          if (_pointA != null && _pointB != null)
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: _pointA!,
+                  width: 60,
+                  height: 60,
+                  alignment: Alignment.topCenter,
+                  child: const LabeledLocationMarker(
+                    label: 'Point A',
+                    color: Colors.green,
+                  ),
+                ),
+                Marker(
+                  point: _pointB!,
+                  width: 60,
+                  height: 60,
+                  alignment: Alignment.topCenter,
+                  child: const LabeledLocationMarker(
+                    label: 'Point B',
+                    color: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+          // Transfer point markers (boarding, transfer, drop-off)
+          if (_selectedSuggestedRoute != null)
+            MarkerLayer(markers: _buildTransferMarkers()),
+          // Walking dashed polylines (to/from stops, transfers)
+          if (_selectedSuggestedRoute != null)
+            PolylineLayer(polylines: _buildWalkingPolylines()),
         ],
       ),
     );

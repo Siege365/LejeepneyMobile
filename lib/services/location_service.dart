@@ -86,7 +86,7 @@ class LocationService {
   static const Duration _timeout = Duration(seconds: 10);
 
   // User-Agent for Nominatim API
-  static const String _userAgent = 'Lejeepney App';
+  static const String _userAgent = 'LeJeepney App';
 
   // ========== PERMISSION & CURRENT LOCATION ==========
 

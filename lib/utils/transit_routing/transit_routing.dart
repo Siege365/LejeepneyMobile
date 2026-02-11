@@ -5,7 +5,7 @@
 ///
 /// ## Usage
 /// ```dart
-/// import 'package:Lejeepney/utils/transit_routing/transit_routing.dart';
+/// import 'package:lejeepney/utils/transit_routing/transit_routing.dart';
 ///
 /// final router = HybridTransitRouter();
 /// final result = await router.findRoutes(

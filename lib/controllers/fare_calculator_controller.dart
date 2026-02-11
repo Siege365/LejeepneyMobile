@@ -7,6 +7,7 @@ import '../models/jeepney_route.dart';
 import '../utils/multi_transfer_matcher.dart';
 import '../utils/transit_routing/transit_routing.dart';
 import '../services/api_service.dart';
+import '../services/fare_settings_service.dart';
 
 /// Data class for fare calculation result
 class FareCalculationResult {
@@ -51,9 +52,9 @@ class MatchedRoute {
 
 /// Controller for fare calculator screen
 class FareCalculatorController extends ChangeNotifier {
-  // Fare calculation constants
-  static const double baseFare = 13.0;
-  static const double perKmRate = 1.80;
+  // Fare calculation from admin settings
+  double get baseFare => FareSettingsService.instance.baseFare;
+  double get perKmRate => FareSettingsService.instance.farePerKm;
   static const double minimumDistance = 4.0;
 
   // State

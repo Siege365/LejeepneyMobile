@@ -1,11 +1,11 @@
-// Basic Flutter widget test for Lejeepney app
+// Basic Flutter widget test for LeJeepney app
 //
 // This test verifies the app can be built and renders without crashing.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:Lejeepney/main.dart';
+import 'package:lejeepney/main.dart';
 
 void main() {
   testWidgets('App renders without crashing', (WidgetTester tester) async {

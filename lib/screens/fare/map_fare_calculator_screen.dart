@@ -6,10 +6,11 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/map_constants.dart';
-import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../services/route_calculation_service.dart';
-import '../../utils/route_matcher.dart'; // Still needed for RouteMatchResult type
+import '../../services/fare_settings_service.dart';
+import '../../utils/route_matcher.dart';
+import '../../services/settings_service.dart';
 import '../../utils/multi_transfer_matcher.dart';
 import '../../utils/transit_routing/transit_routing.dart';
 import '../../utils/resilient_tile_provider.dart';
@@ -43,7 +44,6 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
   String? _areaA;
   String? _areaB;
   double? _distance;
-  double? _fare;
   bool _isSelectingPointA = true;
   bool _isLoadingArea = false;
   bool _isLoadingRoute = false;
@@ -61,9 +61,10 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
   List<MultiTransferRoute> _multiTransferRoutes = [];
   List<SuggestedRoute> _suggestedRoutes = []; // New: hybrid routing results
   HybridRoutingResult? _hybridResult; // New: full hybrid result
+
   final LocationService _locationService = LocationService();
   final RouteCalculationService _routeCalculationService =
-      RouteCalculationService(apiService: ApiService());
+      RouteCalculationService();
 
   @override
   void initState() {
@@ -208,7 +209,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
                   userAgent: MapConstants.appUserAgent,
                 ),
               ),
-              // Route Path - drawn along roads
+              // Route Path - OSRM driving path
               if (_routePath.isNotEmpty)
                 PolylineLayer(
                   polylines: [
@@ -483,31 +484,13 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              'Distance: ${_distance!.toStringAsFixed(2)} km',
+                              'Estimated Distance: ${SettingsService.instance.formatDistance(_distance!)}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textPrimary,
                               ),
                             ),
                           ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.success,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '₱${_fare!.toStringAsFixed(2)}',
-                            style: GoogleFonts.slackey(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
                         ),
                       ],
                     ),
@@ -522,68 +505,75 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
             bottom: 16,
             left: 16,
             right: 16,
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Reset Button
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _resetPoints,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.gray,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
+                Row(
+                  children: [
+                    // Reset Button
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _resetPoints,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.gray,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                        ),
+                        icon: const Icon(Icons.refresh, color: AppColors.white),
+                        label: Text(
+                          'Reset',
+                          style: GoogleFonts.slackey(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.white,
+                          ),
+                        ),
                       ),
                     ),
-                    icon: const Icon(Icons.refresh, color: AppColors.white),
-                    label: Text(
-                      'Reset',
-                      style: GoogleFonts.slackey(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.white,
+                    const SizedBox(width: 12),
+                    // Action Button — changes based on state
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton.icon(
+                        onPressed:
+                            _pointA != null &&
+                                _pointB != null &&
+                                _distance != null &&
+                                !_isMatchingRoutes
+                            ? _confirmAndReturn
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.darkBlue,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                        ),
+                        icon: _isMatchingRoutes
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.white,
+                                ),
+                              )
+                            : const Icon(Icons.check, color: AppColors.white),
+                        label: Text(
+                          _isMatchingRoutes
+                              ? 'Finding Routes...'
+                              : 'Confirm Route',
+                          style: GoogleFonts.slackey(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.white,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Confirm Button
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed:
-                        _pointA != null &&
-                            _pointB != null &&
-                            _distance != null &&
-                            !_isMatchingRoutes
-                        ? _confirmAndReturn
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.darkBlue,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                    ),
-                    icon: _isMatchingRoutes
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.white,
-                            ),
-                          )
-                        : const Icon(Icons.check, color: AppColors.white),
-                    label: Text(
-                      _isMatchingRoutes ? 'Finding Routes...' : 'Confirm Fare',
-                      style: GoogleFonts.slackey(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.white,
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -653,7 +643,6 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
         _pointA = point;
         _areaA = null;
         _distance = null;
-        _fare = null;
         _routePath = [];
       });
       await _getLocationName(point, true);
@@ -665,7 +654,6 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
         _pointB = point;
         _areaB = null;
         _distance = null;
-        _fare = null;
         _routePath = [];
       });
       await _getLocationName(point, false);
@@ -730,6 +718,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
   Future<void> _getRoute() async {
     if (_pointA == null || _pointB == null) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoadingRoute = true;
     });
@@ -778,20 +767,10 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
             return LatLng(coord[1].toDouble(), coord[0].toDouble());
           }).toList();
 
-          // Calculate fare
-          // Minimum fare: ₱13 for first 4km
-          // Additional: ₱1.80 per km after 4km
-          double fare;
-          if (distanceKm <= 4) {
-            fare = 13.0;
-          } else {
-            fare = 13.0 + ((distanceKm - 4) * 1.80);
-          }
-
+          if (!mounted) return;
           setState(() {
             _routePath = routePoints;
             _distance = distanceKm;
-            _fare = fare;
           });
 
           debugPrint('Route path updated with ${_routePath.length} points');
@@ -816,9 +795,11 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
         );
       }
     } finally {
-      setState(() {
-        _isLoadingRoute = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingRoute = false;
+        });
+      }
     }
   }
 
@@ -1000,7 +981,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
         _isMatchingRoutes = false;
       });
 
-      // Return results directly to fare calculator
+      // Return results immediately
       _returnWithResults();
     } catch (e) {
       setState(() {
@@ -1016,32 +997,36 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
         );
       }
 
-      // Return results even if matching failed
+      // Return with whatever data we have
       _returnWithResults();
     }
   }
 
   void _confirmAndReturn() {
-    if (_distance == null || _fare == null) return;
-
-    // First, find matching jeepney routes, then return results
+    if (_distance == null) return;
     _findMatchingJeepneyRoutes();
   }
 
   /// Return results to fare calculator screen
   void _returnWithResults() {
+    // Calculate fare from distance
+    double fare = 0;
+    if (_distance != null) {
+      fare = FareSettingsService.instance.calculateFare(_distance!);
+    }
+
     Navigator.pop(context, {
       'from': _areaA ?? 'Point A',
       'to': _areaB ?? 'Point B',
       'distance': _distance,
-      'fare': _fare,
+      'fare': fare,
       'fromLat': _pointA?.latitude,
       'fromLng': _pointA?.longitude,
       'toLat': _pointB?.latitude,
       'toLng': _pointB?.longitude,
-      'pointA': _pointA, // Add point coordinates
-      'pointB': _pointB, // Add point coordinates
-      'routePath': _routePath, // Add route path
+      'pointA': _pointA,
+      'pointB': _pointB,
+      'routePath': _routePath,
       // Legacy matching results (backward compatibility)
       'matchedRoutes': _matchedRoutes
           .map((m) => {'route': m.route, 'matchPercentage': m.matchPercentage})
@@ -1062,7 +1047,6 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
       _areaA = null;
       _areaB = null;
       _distance = null;
-      _fare = null;
       _isSelectingPointA = true;
       _routePath = [];
       _matchedRoutes = [];

@@ -3,7 +3,7 @@ class AppStrings {
   AppStrings._();
 
   // ========== APP INFO ==========
-  static const String appName = 'Lejeepney';
+  static const String appName = 'LeJeepney';
   static const String appTagline = 'Your Jeepney Companion';
 
   // ========== AUTH ==========
