@@ -57,7 +57,7 @@ class _SplashScreenState extends State<SplashScreen> {
             children: [
               // Jeepney Logo
               Image.asset(
-                'assets/images/LogoSplashScreen.png',
+                'assets/images/LeJeepneyFinal.png',
                 width: 280,
                 height: 280,
                 fit: BoxFit.contain,

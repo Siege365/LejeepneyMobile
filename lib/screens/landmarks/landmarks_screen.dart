@@ -187,7 +187,7 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
 
   // Get filtered landmarks (API only)
   List<Landmark> get _filteredData {
-    return _apiLandmarks.where((landmark) {
+    final filtered = _apiLandmarks.where((landmark) {
       final matchesCategory =
           _selectedCategory == 'All' ||
           landmark.categoryDisplayName == _selectedCategory;
@@ -199,6 +199,18 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
           );
       return matchesCategory && matchesSearch;
     }).toList();
+
+    // Sort: Featured landmarks first, then alphabetically within each group
+    filtered.sort((a, b) {
+      // If one is featured and the other is not, featured comes first
+      if (a.isFeatured && !b.isFeatured) return -1;
+      if (!a.isFeatured && b.isFeatured) return 1;
+
+      // If both have the same featured status, sort alphabetically
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+
+    return filtered;
   }
 
   // legacy data removed

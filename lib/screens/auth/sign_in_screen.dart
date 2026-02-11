@@ -117,7 +117,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       children: [
                         // Logo
                         Image.asset(
-                          'assets/images/LogoSignInPage.png',
+                          'assets/images/LeJeepneyFinal.png',
                           width: 100,
                           height: 100,
                           fit: BoxFit.contain,
@@ -190,7 +190,9 @@ class _SignInScreenState extends State<SignInScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your email';
                             }
-                            final emailError = SecurityUtils.validateEmail(value);
+                            final emailError = SecurityUtils.validateEmail(
+                              value,
+                            );
                             if (emailError != null) {
                               return emailError;
                             }
@@ -293,8 +295,8 @@ class _SignInScreenState extends State<SignInScreen> {
                             onPressed: _isLoading ? null : _register,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.darkBlue,
-                              disabledBackgroundColor:
-                                  AppColors.darkBlue.withValues(alpha: 0.6),
+                              disabledBackgroundColor: AppColors.darkBlue
+                                  .withValues(alpha: 0.6),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(25),
                               ),

@@ -101,18 +101,39 @@ class _HomeScreenState extends State<HomeScreen> {
                               final lang = settings.language;
                               final t = (String key) =>
                                   LocalizationService.translate(key, lang);
+                              // Split welcome message for styled layout
+                              final welcomeMsg = t('welcome_message');
+                              final parts = welcomeMsg.split(' ');
+                              // "Welcome to" on top, "LeJeepney" big below
+                              final topLine = parts.length > 2
+                                  ? parts.sublist(0, parts.length - 1).join(' ')
+                                  : parts.first;
+                              final brandName = parts.length > 2
+                                  ? parts.last
+                                  : (parts.length > 1 ? parts.last : '');
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    t('welcome_message'),
+                                    topLine,
                                     style: GoogleFonts.slackey(
-                                      fontSize: 27.5,
+                                      fontSize: 16,
                                       color: AppColors.textPrimary.withValues(
-                                        alpha: 0.8,
+                                        alpha: 0.6,
                                       ),
                                     ),
                                   ),
+                                  if (brandName.isNotEmpty)
+                                    Text(
+                                      brandName,
+                                      style: GoogleFonts.slackey(
+                                        fontSize: 32,
+                                        color: AppColors.textPrimary.withValues(
+                                          alpha: 0.85,
+                                        ),
+                                        height: 1.1,
+                                      ),
+                                    ),
                                   const SizedBox(height: 4),
                                   Text(
                                     'Your jeepney companion in Davao City',
@@ -129,28 +150,31 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         // Help / Tutorial button
-                        GestureDetector(
-                          onTap: _showTutorialOverlay,
-                          child: Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: AppColors.darkBlue,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.darkBlue.withValues(
-                                    alpha: 0.3,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: GestureDetector(
+                            onTap: _showTutorialOverlay,
+                            child: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: AppColors.darkBlue,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.darkBlue.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
                                   ),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.help_outline,
-                              color: AppColors.white,
-                              size: 20,
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.help_outline,
+                                color: AppColors.white,
+                                size: 20,
+                              ),
                             ),
                           ),
                         ),

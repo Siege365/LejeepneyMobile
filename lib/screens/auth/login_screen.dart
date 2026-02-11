@@ -128,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         // Logo
                         Image.asset(
-                          'assets/images/LogoSignInPage.png',
+                          'assets/images/LeJeepneyFinal.png',
                           width: 100,
                           height: 100,
                           fit: BoxFit.contain,

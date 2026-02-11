@@ -46,10 +46,15 @@ class AboutScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.directions_bus,
-                size: 50,
-                color: AppColors.darkBlue,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Image.asset(
+                    'assets/images/LeJeepneyFinal.png',
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -57,7 +62,7 @@ class AboutScreen extends StatelessWidget {
               'LeJeepney',
               style: GoogleFonts.slackey(
                 fontSize: 24,
-                color: AppColors.darkBlue,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 4),
@@ -79,6 +84,7 @@ class AboutScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     'LeJeepney is your comprehensive guide to navigating Davao City using public jeepney transportation. Discover optimal routes with real-time navigation, book tickets seamlessly, explore landmarks, and calculate fares accurately. Built for Filipino commuters who need reliable, offline-capable transit assistance.',
+                    textAlign: TextAlign.justify,
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -138,6 +144,7 @@ class AboutScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     'Developed as a final project for CCE106 - Mobile Application Development. This app demonstrates modern Flutter development practices including state management, real-time location services, complex routing algorithms, and offline-first architecture.',
+                    textAlign: TextAlign.justify,
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.5,
