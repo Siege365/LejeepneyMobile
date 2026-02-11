@@ -187,7 +187,7 @@ class _ReportFeedbackScreenState extends State<ReportFeedbackScreen> {
   Widget _buildSectionHeader(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: GoogleFonts.slackey(
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: AppColors.darkBlue,
