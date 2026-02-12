@@ -1278,7 +1278,7 @@ class _SearchScreenState extends State<SearchScreen> {
           color: AppColors.white,
         ),
         label: Text(
-          _showRoutesList ? 'Hide Routes' : 'Show Routes',
+          _showRoutesList ? 'Hide Routes' : 'List of Routes',
           style: const TextStyle(
             color: AppColors.white,
             fontSize: 16,

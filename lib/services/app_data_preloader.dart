@@ -26,11 +26,20 @@ class AppDataPreloader {
 
   // Shared transit router with pre-built graph
   HybridTransitRouter? _hybridRouter;
+  Future<void>? _graphBuildFuture;
+
   HybridTransitRouter get hybridRouter =>
       _hybridRouter ??
       HybridTransitRouter(
         config: const HybridRoutingConfig(maxResults: 5, maxTransfers: 2),
       );
+
+  /// Wait for the background graph build to finish (if still running)
+  Future<void> ensureGraphReady() async {
+    if (_graphBuildFuture != null) {
+      await _graphBuildFuture;
+    }
+  }
 
   /// Pre-loaded jeepney routes (avoids API calls in RouteCalculationService)
   List<JeepneyRoute> get cachedRoutes => _routeRepo?.routes ?? [];
@@ -53,6 +62,7 @@ class AppDataPreloader {
 
   /// Pre-load all critical data in parallel.
   /// Called once during splash screen.
+  /// Navigation-critical data loads first; transit graph builds in background.
   Future<void> initialize({
     required RouteRepository routeRepository,
     required LandmarkRepository landmarkRepository,
@@ -66,23 +76,38 @@ class AppDataPreloader {
 
     final stopwatch = Stopwatch()..start();
 
-    // Run all data fetches in parallel for maximum speed
+    // Run all data fetches in parallel with a timeout
+    // If API is slow, proceed anyway after 8 seconds
     await Future.wait([
       _loadRoutes(routeRepository),
       _loadLandmarks(landmarkRepository),
       _loadAuth(authRepository),
       _loadFareSettings(),
-    ]);
-
-    // Pre-build transit graph after routes are loaded (depends on route data)
-    if (routeRepository.hasRoutes) {
-      await _buildTransitGraph(routeRepository.routes);
-    }
+    ]).timeout(
+      const Duration(seconds: 8),
+      onTimeout: () {
+        debugPrint(
+          '[AppDataPreloader] Timeout reached — proceeding with whatever loaded',
+        );
+        return [null, null, null, null];
+      },
+    );
 
     _isInitialized = true;
     debugPrint(
-      '[AppDataPreloader] All data loaded in ${stopwatch.elapsedMilliseconds}ms',
+      '[AppDataPreloader] Critical data loaded in ${stopwatch.elapsedMilliseconds}ms',
     );
+
+    // Pre-build transit graph in the BACKGROUND (non-blocking)
+    // User can navigate immediately; graph will be ready by the time they need it
+    if (routeRepository.hasRoutes) {
+      _graphBuildFuture = _buildTransitGraph(routeRepository.routes).then((_) {
+        debugPrint(
+          '[AppDataPreloader] Total including graph: ${stopwatch.elapsedMilliseconds}ms',
+        );
+        _graphBuildFuture = null;
+      });
+    }
   }
 
   Future<void> _loadRoutes(RouteRepository repo) async {

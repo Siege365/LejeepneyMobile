@@ -1,7 +1,9 @@
 // Login Screen
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
+import '../../repositories/auth_repository.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../utils/security_utils.dart';
@@ -19,7 +21,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _authService = AuthService();
   bool _obscurePassword = true;
   bool _isLoading = false;
 
@@ -36,34 +37,26 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await _authService.login(
+      final authRepo = context.read<AuthRepository>();
+      final result = await authRepo.login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
 
       if (mounted) {
-        // Success - navigate to home
-        Navigator.pushReplacement(
-          context,
-          FadeRoute(page: const MainNavigation()),
-        );
+        if (result.isSuccess) {
+          // Success - navigate to home
+          Navigator.pushReplacement(
+            context,
+            FadeRoute(page: const MainNavigation()),
+          );
+        } else {
+          _showError(result.error ?? 'Login failed');
+        }
       }
     } on AuthException catch (e) {
       if (mounted) {
-        // SECURITY: Show rate limit warning if applicable
-        if (e.isRateLimited) {
-          _showError(e.message);
-        } else {
-          // Show remaining attempts if close to lockout
-          final remaining = _authService.getRemainingAttempts();
-          if (remaining <= 2 && remaining > 0) {
-            _showError(
-              '${e.message}\n$remaining attempts remaining before lockout.',
-            );
-          } else {
-            _showError(e.message);
-          }
-        }
+        _showError(e.message);
       }
     } catch (e) {
       if (mounted) {

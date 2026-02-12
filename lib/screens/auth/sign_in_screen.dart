@@ -1,7 +1,9 @@
 // Registration Screen
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
+import '../../repositories/auth_repository.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../utils/security_utils.dart';
@@ -21,7 +23,6 @@ class _SignInScreenState extends State<SignInScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _authService = AuthService();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
@@ -41,7 +42,8 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await _authService.register(
+      final authRepo = context.read<AuthRepository>();
+      final result = await authRepo.register(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
         password: _passwordController.text,
@@ -49,11 +51,15 @@ class _SignInScreenState extends State<SignInScreen> {
       );
 
       if (mounted) {
-        // Success - navigate to home
-        Navigator.pushReplacement(
-          context,
-          FadeRoute(page: const MainNavigation()),
-        );
+        if (result.isSuccess) {
+          // Success - navigate to home
+          Navigator.pushReplacement(
+            context,
+            FadeRoute(page: const MainNavigation()),
+          );
+        } else {
+          _showError(result.error ?? 'Registration failed');
+        }
       }
     } on AuthException catch (e) {
       if (mounted) {

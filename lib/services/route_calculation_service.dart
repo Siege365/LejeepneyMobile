@@ -24,6 +24,10 @@ class RouteCalculationService {
 
     try {
       final preloader = AppDataPreloader.instance;
+
+      // Ensure the transit graph is ready (may still be building in background)
+      await preloader.ensureGraphReady();
+
       final hybridRouter = preloader.hybridRouter;
 
       // Use pre-loaded routes (no API call needed)

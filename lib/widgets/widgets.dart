@@ -12,5 +12,4 @@ export 'route/route_widgets.dart';
 
 // Existing widgets
 export 'route_list_item.dart';
-export 'search_bar_widget.dart';
 export 'travel_history_item.dart';
