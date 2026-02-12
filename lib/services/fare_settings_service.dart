@@ -42,7 +42,11 @@ class FareSettingsService extends ChangeNotifier {
     _isLoaded = true;
     notifyListeners();
 
-    // 2. Then fetch fresh values from API in background
+    // 2. Wait 2 seconds before fetching from API to avoid rate limit conflicts
+    // (especially with login requests that happen right after app start)
+    await Future.delayed(const Duration(seconds: 2));
+
+    // 3. Then fetch fresh values from API in background
     await fetchFromApi();
   }
 

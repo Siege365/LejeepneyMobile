@@ -204,6 +204,14 @@ class AuthService {
       // SECURITY: Only log in debug mode, never log sensitive data
       SecurityUtils.debugLog('Register status: ${response.statusCode}');
 
+      // Handle rate limiting from server
+      if (response.statusCode == 429) {
+        throw AuthException(
+          'Too many requests. Please wait a moment before trying again.',
+          isRateLimited: true,
+        );
+      }
+
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201 && data['success'] == true) {
@@ -261,6 +269,15 @@ class AuthService {
       // SECURITY: Only log non-sensitive data in debug mode
       SecurityUtils.debugLog('Login URL: $baseUrl/login');
       SecurityUtils.debugLog('Login Status: ${response.statusCode}');
+
+      // Handle rate limiting from server
+      if (response.statusCode == 429) {
+        // Don't count server rate limit as failed attempt
+        throw AuthException(
+          'Too many requests. Please wait a moment before trying again.',
+          isRateLimited: true,
+        );
+      }
 
       final data = jsonDecode(response.body);
 
