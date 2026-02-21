@@ -230,11 +230,11 @@ Fetches pedestrian walking polylines between two coordinates.
 
 **API priority:**
 
-1. **OpenRouteService** (primary) — free tier, requires API key
-2. **OSRM foot profile** (fallback) — self-hosted or public, no key needed
+1. **Laravel server proxy** (primary) — calls `POST /api/v1/walking-route`, which proxies OpenRouteService with server-side API key. Server caches responses for 1 hour.
+2. **OSRM foot profile** (fallback) — public instance, no key needed
 3. **Straight line** (final fallback) — if both APIs fail
 
-**Caching:** LRU cache with 50 entries to avoid redundant API calls.
+**Caching:** Client-side LRU cache with 50 entries to avoid redundant API calls.
 
 **Key methods:**
 

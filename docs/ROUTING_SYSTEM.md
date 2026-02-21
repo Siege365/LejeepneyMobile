@@ -366,14 +366,16 @@ Fetches actual pedestrian walking polylines for map display.
 ### API Priority
 
 ```
-1. OpenRouteService API (primary)
-   URL: https://api.openrouteservice.org/v2/directions/foot-walking
-   Requires: API key
-   Returns: GeoJSON polyline
+1. Laravel Server Proxy (primary)
+   URL: POST /api/v1/walking-route
+   The server calls OpenRouteService with its own API key
+   No API keys exposed in the mobile client
+   Server-side caching (1 hour)
+   Returns: List<LatLng> polyline
 
 2. OSRM Foot Profile (fallback)
    URL: https://router.project-osrm.org/route/v1/foot/{coords}
-   Requires: Nothing
+   Requires: Nothing (public instance)
    Returns: Encoded polyline
 
 3. Straight Line (final fallback)

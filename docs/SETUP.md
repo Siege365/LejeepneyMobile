@@ -242,12 +242,14 @@ Already configured in `Info.plist`:
 
 ### API Keys
 
-| Service             | Required? | Configuration Location          |
-| ------------------- | --------- | ------------------------------- |
-| OpenStreetMap Tiles | No        | Free, no key needed             |
-| OSRM                | No        | Public instance, no key         |
-| OpenRouteService    | Optional  | In `walking_route_service.dart` |
-| Nominatim           | No        | Free with rate limiting         |
+| Service             | Required? | Configuration Location        |
+| ------------------- | --------- | ----------------------------- |
+| OpenStreetMap Tiles | No        | Free, no key needed           |
+| OSRM                | No        | Public instance, no key       |
+| OpenRouteService    | No        | Server-side only (in Laravel) |
+| Nominatim           | No        | Free with rate limiting       |
+
+**Note:** The OpenRouteService API key is configured in the Laravel backend (`.env` file), not in the Flutter app. Walking route requests are proxied through `POST /api/v1/walking-route` to keep the API key secure.
 
 ---
 
