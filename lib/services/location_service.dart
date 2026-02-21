@@ -247,8 +247,12 @@ class LocationService {
         );
       }
     } catch (e) {
-      _debugLog('Reverse geocoding error: $e');
-      return GeocodingResult(error: 'Geocoding failed');
+      // Only log if it's not a network error (offline)
+      if (!e.toString().contains('SocketException') &&
+          !e.toString().contains('Failed host lookup')) {
+        _debugLog('Reverse geocoding error: $e');
+      }
+      return GeocodingResult(error: 'Geocoding unavailable offline');
     }
   }
 

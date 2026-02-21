@@ -162,6 +162,70 @@ class AuthRepository extends ChangeNotifier {
   // TODO: Implement changePassword when AuthService supports it
   // Future<Result<void>> changePassword({ ... }) async { }
 
+  /// Request password reset - sends reset code to email
+  Future<Result<void>> forgotPassword({required String email}) async {
+    _state = AuthState.loading;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _authService.forgotPassword(email: email);
+
+      // Don't change auth state - user is still unauthenticated
+      _state = AuthState.unauthenticated;
+      notifyListeners();
+
+      return Result.success(null);
+    } on AuthException catch (e) {
+      _state = AuthState.unauthenticated;
+      _error = e.message;
+      notifyListeners();
+      return Result.failure(e.message);
+    } catch (e) {
+      _state = AuthState.unauthenticated;
+      _error = 'Failed to send reset code';
+      notifyListeners();
+      return Result.failure(e.toString());
+    }
+  }
+
+  /// Reset password with code from email
+  Future<Result<void>> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+    required String passwordConfirmation,
+  }) async {
+    _state = AuthState.loading;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _authService.resetPassword(
+        email: email,
+        code: code,
+        newPassword: newPassword,
+        passwordConfirmation: passwordConfirmation,
+      );
+
+      // Password reset successful - user still needs to login
+      _state = AuthState.unauthenticated;
+      notifyListeners();
+
+      return Result.success(null);
+    } on AuthException catch (e) {
+      _state = AuthState.unauthenticated;
+      _error = e.message;
+      notifyListeners();
+      return Result.failure(e.message);
+    } catch (e) {
+      _state = AuthState.unauthenticated;
+      _error = 'Failed to reset password';
+      notifyListeners();
+      return Result.failure(e.toString());
+    }
+  }
+
   /// Clear error state
   void clearError() {
     _error = null;

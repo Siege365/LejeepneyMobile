@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../utils/security_utils.dart';
+import 'http_client_factory.dart';
 import 'recent_activity_service_v2.dart';
 
 class AuthException implements Exception {
@@ -26,6 +27,9 @@ class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   AuthService._internal();
+
+  // SSL-safe HTTP client (handles ngrok certificates in debug mode)
+  final http.Client _client = createHttpClient();
 
   // ========== SECURE STORAGE ==========
   // Uses platform-specific encryption (Keychain on iOS, EncryptedSharedPreferences on Android)
@@ -182,7 +186,7 @@ class AuthService {
     }
 
     try {
-      final response = await http
+      final response = await _client
           .post(
             Uri.parse('$baseUrl/register'),
             headers: {
@@ -254,7 +258,7 @@ class AuthService {
     }
 
     try {
-      final response = await http
+      final response = await _client
           .post(
             Uri.parse('$baseUrl/login'),
             headers: {
@@ -315,7 +319,7 @@ class AuthService {
       final token = await getToken();
       if (token != null) {
         // Call logout endpoint to invalidate token on server
-        await http
+        await _client
             .post(
               Uri.parse('$baseUrl/logout'),
               headers: {
@@ -340,6 +344,187 @@ class AuthService {
     }
   }
 
+  // ========== PASSWORD RESET ==========
+
+  /// Request password reset - sends reset code to email
+  Future<void> forgotPassword({required String email}) async {
+    try {
+      // SECURITY: Sanitize and validate email
+      final sanitizedEmail = SecurityUtils.sanitizeEmail(email);
+      final emailError = SecurityUtils.validateEmail(sanitizedEmail);
+      if (emailError != null) {
+        throw AuthException(emailError);
+      }
+
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/password/forgot'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: json.encode({'email': sanitizedEmail}),
+          )
+          .timeout(_timeout);
+
+      // Handle 429 Too Many Requests (rate limiting)
+      if (response.statusCode == 429) {
+        await Future.delayed(const Duration(seconds: 2));
+        throw AuthException(
+          'Too many password reset requests. Please try again later.',
+          isRateLimited: true,
+        );
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          SecurityUtils.debugLog('Password reset email sent successfully');
+          return;
+        }
+      }
+
+      // Handle validation errors
+      if (response.statusCode == 422) {
+        final data = json.decode(response.body);
+        final errors = data['errors'] as Map<String, dynamic>?;
+        if (errors != null && errors.containsKey('email')) {
+          throw AuthException(
+            (errors['email'] as List).first.toString(),
+            errors: errors,
+          );
+        }
+        throw AuthException('Invalid email address');
+      }
+
+      // Handle not found (email doesn't exist)
+      if (response.statusCode == 404) {
+        throw AuthException('No account found with this email address');
+      }
+
+      throw AuthException('Failed to send reset code. Please try again.');
+    } on AuthException {
+      rethrow;
+    } catch (e) {
+      if (e is SocketException) {
+        throw AuthException('Network error. Please check your connection.');
+      }
+      SecurityUtils.debugLog('Forgot password error: $e');
+      throw AuthException('Failed to send reset code. Please try again.');
+    }
+  }
+
+  /// Reset password with code from email
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+    required String passwordConfirmation,
+  }) async {
+    try {
+      // SECURITY: Sanitize and validate inputs
+      final sanitizedEmail = SecurityUtils.sanitizeEmail(email);
+      final emailError = SecurityUtils.validateEmail(sanitizedEmail);
+      if (emailError != null) {
+        throw AuthException(emailError);
+      }
+
+      // Validate password strength
+      final passwordError = SecurityUtils.validatePassword(newPassword);
+      if (passwordError != null) {
+        throw AuthException(passwordError);
+      }
+
+      // Validate password confirmation
+      if (newPassword != passwordConfirmation) {
+        throw AuthException('Passwords do not match');
+      }
+
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/password/reset'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: json.encode({
+              'email': sanitizedEmail,
+              'code': code.trim(),
+              'password': newPassword,
+              'password_confirmation': passwordConfirmation,
+            }),
+          )
+          .timeout(_timeout);
+
+      // Handle 429 Too Many Requests
+      if (response.statusCode == 429) {
+        await Future.delayed(const Duration(seconds: 2));
+        throw AuthException(
+          'Too many reset attempts. Please try again later.',
+          isRateLimited: true,
+        );
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          SecurityUtils.debugLog('Password reset successfully');
+          return;
+        }
+      }
+
+      // Handle validation errors
+      if (response.statusCode == 422) {
+        final data = json.decode(response.body);
+        final errors = data['errors'] as Map<String, dynamic>?;
+
+        if (errors != null) {
+          // Check for code errors first
+          if (errors.containsKey('code')) {
+            throw AuthException(
+              (errors['code'] as List).first.toString(),
+              errors: errors,
+            );
+          }
+          // Then password errors
+          if (errors.containsKey('password')) {
+            throw AuthException(
+              (errors['password'] as List).first.toString(),
+              errors: errors,
+            );
+          }
+          // General validation error
+          final firstError = errors.values.first;
+          throw AuthException(
+            firstError is List
+                ? firstError.first.toString()
+                : firstError.toString(),
+            errors: errors,
+          );
+        }
+        throw AuthException('Invalid reset code or password');
+      }
+
+      // Handle invalid/expired code
+      if (response.statusCode == 400 || response.statusCode == 404) {
+        final data = json.decode(response.body);
+        throw AuthException(data['message'] ?? 'Invalid or expired reset code');
+      }
+
+      throw AuthException('Failed to reset password. Please try again.');
+    } on AuthException {
+      rethrow;
+    } catch (e) {
+      if (e is SocketException) {
+        throw AuthException('Network error. Please check your connection.');
+      }
+      SecurityUtils.debugLog('Reset password error: $e');
+      throw AuthException('Failed to reset password. Please try again.');
+    }
+  }
+
   // ========== GET CURRENT USER ==========
   Future<UserModel?> getCurrentUser() async {
     try {
@@ -353,7 +538,7 @@ class AuthService {
       final token = await getToken();
       if (token == null) return null;
 
-      final response = await http
+      final response = await _client
           .get(
             Uri.parse('$baseUrl/user'),
             headers: {
@@ -497,7 +682,7 @@ class AuthService {
       final token = await getToken();
       if (token == null) throw AuthException('Not authenticated');
 
-      final response = await http
+      final response = await _client
           .put(
             Uri.parse('$baseUrl/user/profile'),
             headers: {
@@ -548,7 +733,7 @@ class AuthService {
       final token = await getToken();
       if (token == null) throw AuthException('Not authenticated');
 
-      final response = await http
+      final response = await _client
           .put(
             Uri.parse('$baseUrl/user/password'),
             headers: {
@@ -586,7 +771,7 @@ class AuthService {
       final token = await getToken();
       if (token == null) throw AuthException('Not authenticated');
 
-      final response = await http
+      final response = await _client
           .delete(
             Uri.parse('$baseUrl/user/account'),
             headers: {

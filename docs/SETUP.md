@@ -101,6 +101,7 @@ flutter run -d <device>
 | `path`                   | ^1.8.3   | File path utilities                 |
 | `connectivity_plus`      | ^5.0.2   | Network connectivity detection      |
 | `flutter_svg`            | ^2.2.3   | SVG image rendering                 |
+| `flutter_cache_manager`  | ^3.3.1   | Persistent map tile caching         |
 | `google_fonts`           | ^6.2.1   | Google Fonts integration            |
 | `cupertino_icons`        | ^1.0.8   | iOS-style icons                     |
 
@@ -295,15 +296,3 @@ cd android
 cd ..
 flutter run
 ```
-
----
-
-## Procfile (Deployment)
-
-The project includes a `Procfile` for deployment platforms like Heroku/Railway:
-
-```
-web: <command>
-```
-
-This is for deploying the web version of the Flutter app.

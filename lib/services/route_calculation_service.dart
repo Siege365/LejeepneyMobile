@@ -4,17 +4,24 @@ import '../models/jeepney_route.dart';
 import '../utils/multi_transfer_matcher.dart';
 import '../utils/route_matcher.dart';
 import '../utils/transit_routing/transit_routing.dart';
+import 'api_service.dart';
 import 'app_data_preloader.dart';
 
 /// Service responsible for calculating routes and matching jeepney routes.
-/// Uses pre-loaded data from AppDataPreloader for instant calculations
-/// instead of re-fetching routes/landmarks from API every time.
+///
+/// Strategy: **Server-first with local fallback.**
+/// 1. Try server `findRoutesV2()` — fastest, supports multi-transfer
+/// 2. If server fails, fall back to local `HybridTransitRouter` (pre-built graph)
+/// 3. Legacy `RouteMatcher`/`MultiTransferMatcher` still run for OSRM path matching
 class RouteCalculationService {
+  final ApiService _apiService = ApiService();
+
   RouteCalculationService();
 
-  /// Calculate routes between two points using pre-loaded data.
-  /// The hybrid router and route data are already cached by AppDataPreloader,
-  /// so this skips all network calls and graph rebuilds.
+  /// Calculate routes between two points.
+  ///
+  /// Tries the server API first for speed and multi-transfer support.
+  /// Falls back to local graph-based routing if the server is unreachable.
   Future<RouteCalculationResult> calculateRoutes({
     required LatLng origin,
     required LatLng destination,
@@ -22,6 +29,45 @@ class RouteCalculationService {
   }) async {
     final stopwatch = Stopwatch()..start();
 
+    // === Phase 1: Try server-side route finding ===
+    try {
+      final serverRoutes = await _apiService.findRoutesV2(
+        fromLat: origin.latitude,
+        fromLng: origin.longitude,
+        toLat: destination.latitude,
+        toLng: destination.longitude,
+      );
+
+      if (serverRoutes.isNotEmpty) {
+        final calculatedFare = serverRoutes.first.totalFare;
+
+        stopwatch.stop();
+        debugPrint(
+          '[RouteCalcService] Server returned ${serverRoutes.length} routes '
+          'in ${stopwatch.elapsedMilliseconds}ms',
+        );
+
+        return RouteCalculationResult(
+          success: true,
+          calculatedFare: calculatedFare,
+          legacyMatches: [],
+          legacyMultiTransfer: [],
+          hybridSuggestedRoutes: serverRoutes,
+          hybridResult: null, // Not from local hybrid router
+          fromServer: true,
+        );
+      }
+
+      debugPrint(
+        '[RouteCalcService] Server returned 0 routes, falling back to local',
+      );
+    } catch (e) {
+      debugPrint(
+        '[RouteCalcService] Server routing failed: $e — falling back to local',
+      );
+    }
+
+    // === Phase 2: Local fallback (pre-built graph) ===
     try {
       final preloader = AppDataPreloader.instance;
 
@@ -35,7 +81,7 @@ class RouteCalculationService {
       final landmarks = preloader.cachedLandmarkMaps;
 
       debugPrint(
-        '[RouteCalcService] Using ${jeepneyRoutes.length} pre-loaded routes, '
+        '[RouteCalcService] Local fallback: ${jeepneyRoutes.length} pre-loaded routes, '
         '${landmarks?.length ?? 0} landmarks',
       );
 
@@ -49,7 +95,7 @@ class RouteCalculationService {
       );
 
       debugPrint(
-        '[RouteCalcService] Hybrid result: ${hybridResult.suggestedRoutes.length} routes',
+        '[RouteCalcService] Local result: ${hybridResult.suggestedRoutes.length} routes',
       );
 
       // Legacy matching for backward compatibility (only if OSRM path exists)
@@ -81,7 +127,7 @@ class RouteCalculationService {
 
       stopwatch.stop();
       debugPrint(
-        '[RouteCalcService] Calculation done in ${stopwatch.elapsedMilliseconds}ms',
+        '[RouteCalcService] Local calculation done in ${stopwatch.elapsedMilliseconds}ms',
       );
 
       return RouteCalculationResult(
@@ -91,13 +137,27 @@ class RouteCalculationService {
         legacyMultiTransfer: legacyMultiTransfer,
         hybridSuggestedRoutes: hybridResult.suggestedRoutes,
         hybridResult: hybridResult,
+        fromServer: false,
       );
     } catch (e, stackTrace) {
       debugPrint('Error calculating routes: $e');
       debugPrint('Stack trace: $stackTrace');
+
+      // Provide user-friendly error message
+      String userMessage;
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('HandshakeException') ||
+          e.toString().contains('Connection refused')) {
+        userMessage =
+            'No internet connection. Route calculation requires '
+            'cached route data — please connect to WiFi at least once.';
+      } else {
+        userMessage = 'Unable to calculate routes. Please try again.';
+      }
+
       return RouteCalculationResult(
         success: false,
-        errorMessage: e.toString(),
+        errorMessage: userMessage,
         calculatedFare: 0.0,
         legacyMatches: [],
         legacyMultiTransfer: [],
@@ -117,6 +177,7 @@ class RouteCalculationResult {
   final List<MultiTransferRoute> legacyMultiTransfer;
   final List<SuggestedRoute> hybridSuggestedRoutes;
   final HybridRoutingResult? hybridResult;
+  final bool fromServer; // Whether results came from server API
 
   RouteCalculationResult({
     required this.success,
@@ -126,6 +187,7 @@ class RouteCalculationResult {
     required this.legacyMultiTransfer,
     required this.hybridSuggestedRoutes,
     this.hybridResult,
+    this.fromServer = false,
   });
 
   Map<int, double> get routeMatchPercentages {

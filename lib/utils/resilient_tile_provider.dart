@@ -3,14 +3,24 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:http/http.dart' as http;
 
-/// Custom tile provider with better error handling and retry logic
+/// Custom tile provider with offline caching and retry logic
 class ResilientTileProvider extends TileProvider {
   final int maxRetries;
   final Duration retryDelay;
   final String userAgent;
   final http.Client _client = http.Client();
+
+  // Cache manager for persistent tile storage
+  static final CacheManager _cacheManager = CacheManager(
+    Config(
+      'map_tiles_cache',
+      stalePeriod: const Duration(days: 30), // Cache tiles for 30 days
+      maxNrOfCacheObjects: 1000, // Store up to 1000 tiles
+    ),
+  );
 
   ResilientTileProvider({
     this.maxRetries = 2,
@@ -20,8 +30,9 @@ class ResilientTileProvider extends TileProvider {
 
   @override
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
-    return ResilientNetworkImage(
+    return CachedTileImage(
       getTileUrl(coordinates, options),
+      cacheManager: _cacheManager,
       client: _client,
       headers: {'User-Agent': userAgent},
       maxRetries: maxRetries,
@@ -36,16 +47,18 @@ class ResilientTileProvider extends TileProvider {
   }
 }
 
-/// Network image provider with retry logic
-class ResilientNetworkImage extends ImageProvider<ResilientNetworkImage> {
+/// Network image provider with persistent caching and retry logic
+class CachedTileImage extends ImageProvider<CachedTileImage> {
   final String url;
+  final CacheManager cacheManager;
   final http.Client client;
   final Map<String, String> headers;
   final int maxRetries;
   final Duration retryDelay;
 
-  const ResilientNetworkImage(
+  const CachedTileImage(
     this.url, {
+    required this.cacheManager,
     required this.client,
     required this.headers,
     this.maxRetries = 2,
@@ -53,13 +66,13 @@ class ResilientNetworkImage extends ImageProvider<ResilientNetworkImage> {
   });
 
   @override
-  Future<ResilientNetworkImage> obtainKey(ImageConfiguration configuration) {
-    return SynchronousFuture<ResilientNetworkImage>(this);
+  Future<CachedTileImage> obtainKey(ImageConfiguration configuration) {
+    return SynchronousFuture<CachedTileImage>(this);
   }
 
   @override
   ImageStreamCompleter loadImage(
-    ResilientNetworkImage key,
+    CachedTileImage key,
     ImageDecoderCallback decode,
   ) {
     return MultiFrameImageStreamCompleter(
@@ -70,52 +83,66 @@ class ResilientNetworkImage extends ImageProvider<ResilientNetworkImage> {
   }
 
   Future<ui.Codec> _loadAsync(
-    ResilientNetworkImage key,
+    CachedTileImage key,
     ImageDecoderCallback decode,
   ) async {
-    Exception? lastError;
-
-    for (int attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        final response = await client
-            .get(Uri.parse(url), headers: headers)
-            .timeout(const Duration(seconds: 10));
-
-        if (response.statusCode == 200) {
-          final bytes = response.bodyBytes;
-          if (bytes.isEmpty) {
-            throw Exception('Empty response body');
-          }
-
-          final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-          return decode(buffer);
-        } else if (response.statusCode == 404) {
-          // Don't retry 404s
-          throw Exception('Tile not found (404)');
-        } else {
-          throw Exception('HTTP ${response.statusCode}');
-        }
-      } on http.ClientException catch (e) {
-        lastError = e;
-        // Network errors are often transient, retry them
-        if (attempt < maxRetries) {
-          await Future.delayed(retryDelay * (attempt + 1));
-          continue;
-        }
-      } catch (e) {
-        lastError = e is Exception ? e : Exception(e.toString());
-        // Don't retry other errors
-        break;
+    try {
+      // Try cache first (instant for offline)
+      final fileInfo = await cacheManager.getFileFromCache(url);
+      if (fileInfo != null) {
+        final bytes = await fileInfo.file.readAsBytes();
+        final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+        return decode(buffer);
       }
+
+      // Not in cache, fetch from network with retries
+      Exception? lastError;
+      for (int attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          final response = await client
+              .get(Uri.parse(url), headers: headers)
+              .timeout(const Duration(seconds: 10));
+
+          if (response.statusCode == 200) {
+            final bytes = response.bodyBytes;
+            if (bytes.isEmpty) {
+              throw Exception('Empty response body');
+            }
+
+            // Save to cache for offline use
+            await cacheManager.putFile(url, bytes);
+
+            final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+            return decode(buffer);
+          } else if (response.statusCode == 404) {
+            throw Exception('Tile not found (404)');
+          } else {
+            throw Exception('HTTP ${response.statusCode}');
+          }
+        } on http.ClientException catch (e) {
+          lastError = e;
+          if (attempt < maxRetries) {
+            await Future.delayed(retryDelay * (attempt + 1));
+            continue;
+          }
+        } catch (e) {
+          lastError = e is Exception ? e : Exception(e.toString());
+          break;
+        }
+      }
+
+      // Silent failure for network errors
+      if (kDebugMode && lastError != null) {
+        if (!lastError.toString().contains('SocketException') &&
+            !lastError.toString().contains('Failed host lookup')) {
+          debugPrint('Tile load failed: $url');
+        }
+      }
+    } catch (e) {
+      // Cache error - not critical
     }
 
-    // All retries failed, throw a silent error
-    if (kDebugMode) {
-      debugPrint('Tile load failed after ${maxRetries + 1} attempts: $url');
-    }
-
-    // Return a 1x1 transparent image instead of throwing
-    // This prevents the exception spam in console
+    // Return 1x1 transparent PNG
     final emptyBytes = Uint8List.fromList([
       0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
       0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
@@ -135,7 +162,7 @@ class ResilientNetworkImage extends ImageProvider<ResilientNetworkImage> {
   @override
   bool operator ==(Object other) {
     if (other.runtimeType != runtimeType) return false;
-    return other is ResilientNetworkImage && other.url == url;
+    return other is CachedTileImage && other.url == url;
   }
 
   @override

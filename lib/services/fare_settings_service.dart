@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'http_client_factory.dart';
 
 /// Centralized fare settings fetched from the admin API.
 /// Caches values locally so the app works offline too.
@@ -59,7 +59,8 @@ class FareSettingsService extends ChangeNotifier {
       final url = '${ApiService.baseUrl}/settings';
       debugPrint('[FareSettings] Fetching from: $url');
 
-      final response = await http
+      final client = createHttpClient();
+      final response = await client
           .get(
             Uri.parse(url),
             headers: {
@@ -88,6 +89,10 @@ class FareSettingsService extends ChangeNotifier {
             '[FareSettings] Updated: baseFare=₱$_baseFare, farePerKm=₱$_farePerKm',
           );
         }
+      } else if (response.statusCode == 404) {
+        debugPrint(
+          '[FareSettings] ⚠️ Settings endpoint not implemented on server yet - using defaults',
+        );
       } else {
         debugPrint('[FareSettings] API returned ${response.statusCode}');
       }

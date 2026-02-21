@@ -1,42 +1,34 @@
 // Walking Route Service
-// Fetches pedestrian walking paths using OpenRouteService foot-walking profile
-// This gives realistic human walking paths (footways, sidewalks, pedestrian
-// zones, park paths, shortcuts) instead of car-road-following routes.
+// Fetches pedestrian walking paths using server proxy first,
+// then falls back to OSRM foot profile or straight line.
+//
+// The ORS API key is now kept server-side only (in Laravel .env)
+// so no API keys are exposed in the mobile client.
 
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'api_service.dart';
 
 /// Service to fetch realistic pedestrian walking paths.
 ///
-/// Uses OpenRouteService (ORS) foot-walking profile which routes on:
-///   - Sidewalks, footways, pedestrian zones
-///   - Park paths, trails, shortcuts
-///   - Crosswalks and pedestrian crossings
-///   - Any way tagged for foot access in OSM
-///
-/// Falls back to OSRM foot profile, then straight line on failure.
+/// Strategy: **Server proxy first** → OSRM foot fallback → straight line.
+/// The server proxy (Laravel) calls ORS with its own API key.
 class WalkingRouteService {
-  // Primary: OpenRouteService — best pedestrian routing
-  static const String _orsBaseUrl =
-      'https://api.openrouteservice.org/v2/directions/foot-walking';
-  // Free public API key for ORS (5,000 req/day limit for free tier)
-  static const String _orsApiKey =
-      '5b3ce3597851110001cf62487f0b5c6e4c3a4e0e8f0c49a48f7f1a0b';
   // Fallback: OSRM foot profile (road-based but still pedestrian-allowed)
   static const String _osrmBaseUrl =
       'https://router.project-osrm.org/route/v1/foot';
 
   static const Duration _timeout = Duration(seconds: 6);
+  static final ApiService _apiService = ApiService();
 
   // Simple in-memory cache to avoid redundant API calls
   static final Map<String, List<LatLng>> _cache = {};
   static const int _maxCacheSize = 50;
 
   /// Fetch a realistic pedestrian walking path between two points.
-  /// Uses ORS foot-walking → OSRM foot fallback → straight line.
-  /// Pedestrians can walk against one-way traffic and use sidewalks/crossings.
+  /// Uses server proxy → OSRM foot fallback → straight line.
   static Future<List<LatLng>> fetchWalkingPath(LatLng from, LatLng to) async {
     // Skip API calls for very short distances (< 30m)
     final distance = const Distance().as(LengthUnit.Meter, from, to);
@@ -48,14 +40,14 @@ class WalkingRouteService {
         '->${to.latitude.toStringAsFixed(5)},${to.longitude.toStringAsFixed(5)}';
     if (_cache.containsKey(cacheKey)) return _cache[cacheKey]!;
 
-    // Try ORS foot-walking (best pedestrian routing)
-    final orsPath = await _fetchFromORS(from, to);
-    if (orsPath != null) {
-      _addToCache(cacheKey, orsPath);
-      return orsPath;
+    // Try server proxy first (ORS key stays server-side)
+    final serverPath = await _fetchFromServer(from, to);
+    if (serverPath != null) {
+      _addToCache(cacheKey, serverPath);
+      return serverPath;
     }
 
-    // Fallback: OSRM foot profile (still pedestrian-aware)
+    // Fallback: OSRM foot profile (still pedestrian-aware, no API key needed)
     final osrmPath = await _fetchFromOSRM(from, to);
     if (osrmPath != null) {
       _addToCache(cacheKey, osrmPath);
@@ -67,55 +59,28 @@ class WalkingRouteService {
     return [from, to];
   }
 
-  /// OpenRouteService foot-walking profile — routes on footpaths, sidewalks,
-  /// pedestrian zones, park paths, and other walkable ways.
-  static Future<List<LatLng>?> _fetchFromORS(LatLng from, LatLng to) async {
+  /// Server proxy — Laravel calls ORS with its own API key.
+  /// No API keys exposed in the mobile client.
+  static Future<List<LatLng>?> _fetchFromServer(LatLng from, LatLng to) async {
     try {
-      final url = Uri.parse(
-        '$_orsBaseUrl'
-        '?start=${from.longitude},${from.latitude}'
-        '&end=${to.longitude},${to.latitude}',
+      final path = await _apiService.fetchWalkingRoute(
+        fromLat: from.latitude,
+        fromLng: from.longitude,
+        toLat: to.latitude,
+        toLng: to.longitude,
       );
-
-      final response = await http
-          .get(
-            url,
-            headers: {
-              'Authorization': _orsApiKey,
-              'Accept': 'application/json, application/geo+json',
-            },
-          )
-          .timeout(_timeout);
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final features = data['features'] as List?;
-        if (features != null && features.isNotEmpty) {
-          final geometry = features[0]['geometry'];
-          if (geometry != null && geometry['type'] == 'LineString') {
-            final coords = geometry['coordinates'] as List;
-            final path = coords.map<LatLng>((c) {
-              return LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble());
-            }).toList();
-            if (path.length >= 2) {
-              debugPrint(
-                '[WalkingRouteService] ORS foot-walking: ${path.length} points',
-              );
-              return path;
-            }
-          }
-        }
-      } else {
-        debugPrint('[WalkingRouteService] ORS returned ${response.statusCode}');
+      if (path.length >= 2) {
+        debugPrint('[WalkingRouteService] Server proxy: ${path.length} points');
+        return path;
       }
     } catch (e) {
-      debugPrint('[WalkingRouteService] ORS error: $e');
+      debugPrint('[WalkingRouteService] Server proxy failed: $e');
     }
     return null;
   }
 
   /// OSRM foot profile fallback — uses road network with pedestrian-allowed
-  /// ways. Less ideal than ORS but still better than straight lines.
+  /// ways. No API key required (public service).
   static Future<List<LatLng>?> _fetchFromOSRM(LatLng from, LatLng to) async {
     try {
       final url = Uri.parse(
@@ -146,7 +111,11 @@ class WalkingRouteService {
         }
       }
     } catch (e) {
-      debugPrint('[WalkingRouteService] OSRM error: $e');
+      // Only log if it's not a network error (offline)
+      if (!e.toString().contains('SocketException') &&
+          !e.toString().contains('Failed host lookup')) {
+        debugPrint('[WalkingRouteService] OSRM error: $e');
+      }
     }
     return null;
   }

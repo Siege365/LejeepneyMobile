@@ -4,13 +4,16 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/recent_activity_model.dart';
+import 'http_client_factory.dart';
 
 /// API service for recent activity server communication
 class RecentActivityApiService {
+  // SSL-safe HTTP client (handles ngrok certificates in debug mode)
+  final http.Client _client = createHttpClient();
+
   // Use the same URL configuration as ApiService
   static const String _ngrokUrl =
       'https://heterochromous-lilli-luetically.ngrok-free.dev/api/v1';
-  static const String _localIp = '172.19.25.44';
   static const String _port = '8000';
   static const String _apiPath = '/api/v1';
 
@@ -61,7 +64,9 @@ class RecentActivityApiService {
         '$_baseUrl/recent-activities',
       ).replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: headers).timeout(_timeout);
+      final response = await _client
+          .get(uri, headers: headers)
+          .timeout(_timeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

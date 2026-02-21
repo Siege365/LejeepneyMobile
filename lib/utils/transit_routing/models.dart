@@ -108,12 +108,110 @@ class JourneySegment {
   bool get isTransfer => type == JourneySegmentType.transfer;
   bool get isJeepneyRide => type == JourneySegmentType.jeepneyRide;
 
+  /// Parse a journey segment from the Laravel server JSON response.
+  ///
+  /// Expected format (Laravel `POST /api/v1/routes/find`):
+  /// ```json
+  /// {
+  ///   "type": "walking" | "jeepney_ride",
+  ///   "route_id": 12,                    // only for jeepney_ride
+  ///   "route_number": "01A",             // only for jeepney_ride
+  ///   "route_name": "Maa - Agdao",       // only for jeepney_ride
+  ///   "route_color": "#d6ce1f",          // only for jeepney_ride
+  ///   "from": { "lat": 7.07, "lng": 125.61 },
+  ///   "to": { "lat": 7.071, "lng": 125.611 },
+  ///   "from_name": "Your Location",
+  ///   "to_name": "Boarding Point",
+  ///   "distance_km": 0.045,
+  ///   "fare": 13.00,
+  ///   "estimated_time_minutes": 1,
+  ///   "path": [ {"lat": ..., "lng": ...}, ... ]  // when include_walking_paths=true
+  /// }
+  /// ```
+  ///
+  /// Note: Laravel only returns "walking" and "jeepney_ride" types.
+  /// Transfer inference (walking between two rides) is done in
+  /// [SuggestedRoute.fromServerJson].
+  factory JourneySegment.fromServerJson(
+    Map<String, dynamic> json, {
+    JourneySegmentType? typeOverride,
+  }) {
+    // Parse segment type (server only sends "walking" and "jeepney_ride")
+    final typeStr = (json['type'] as String?)?.toLowerCase() ?? 'walking';
+    final JourneySegmentType segType;
+    if (typeOverride != null) {
+      segType = typeOverride;
+    } else {
+      switch (typeStr) {
+        case 'jeepney_ride':
+          segType = JourneySegmentType.jeepneyRide;
+          break;
+        default:
+          segType = JourneySegmentType.walking;
+      }
+    }
+
+    // Build JeepneyRoute from flat fields (only for jeepney_ride segments)
+    JeepneyRoute? route;
+    if (typeStr == 'jeepney_ride' && json['route_id'] != null) {
+      route = JeepneyRoute(
+        id: (json['route_id'] as num?)?.toInt() ?? 0,
+        name: (json['route_name'] as String?) ?? '',
+        routeNumber: (json['route_number'] as String?) ?? '',
+        baseFare: (json['fare'] as num?)?.toDouble() ?? 13.0,
+        color: json['route_color'] as String?,
+        status: 'available',
+      );
+    }
+
+    // Parse from/to points
+    final fromPt = json['from'] as Map<String, dynamic>? ?? {};
+    final toPt = json['to'] as Map<String, dynamic>? ?? {};
+
+    // Parse path (walking path when include_walking_paths=true, or ride path)
+    List<LatLng>? walkingPath;
+    if (json['path'] != null && json['path'] is List) {
+      walkingPath = (json['path'] as List).map<LatLng>((c) {
+        if (c is Map) {
+          return LatLng(
+            (c['lat'] as num?)?.toDouble() ?? 0.0,
+            (c['lng'] as num?)?.toDouble() ?? 0.0,
+          );
+        }
+        return LatLng(0, 0);
+      }).toList();
+    }
+
+    return JourneySegment(
+      route: route,
+      startPoint: LatLng(
+        (fromPt['lat'] as num?)?.toDouble() ?? 0.0,
+        (fromPt['lng'] as num?)?.toDouble() ?? 0.0,
+      ),
+      endPoint: LatLng(
+        (toPt['lat'] as num?)?.toDouble() ?? 0.0,
+        (toPt['lng'] as num?)?.toDouble() ?? 0.0,
+      ),
+      startName: json['from_name'] as String?,
+      endName: json['to_name'] as String?,
+      type: segType,
+      distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 0.0,
+      fare: (json['fare'] as num?)?.toDouble() ?? 0.0,
+      estimatedTimeMinutes:
+          (json['estimated_time_minutes'] as num?)?.toDouble() ?? 0.0,
+      walkingPath: walkingPath,
+    );
+  }
+
   @override
   String toString() {
     if (isWalking || isTransfer) {
       return 'Walk ${distanceKm.toStringAsFixed(2)}km to ${endName ?? 'destination'}';
     }
-    return 'Take ${route?.routeNumber ?? 'Unknown'} (${distanceKm.toStringAsFixed(2)}km, ₱${fare.toStringAsFixed(2)})';
+    final routeLabel = route != null
+        ? (route!.routeNumber.isNotEmpty ? route!.routeNumber : route!.name)
+        : 'Unknown';
+    return 'Take $routeLabel (${distanceKm.toStringAsFixed(2)}km, ₱${fare.toStringAsFixed(2)})';
   }
 }
 
@@ -121,6 +219,40 @@ enum JourneySegmentType {
   walking, // Walk to first stop or from last stop
   transfer, // Walk between routes (transfer)
   jeepneyRide, // Ride a jeepney
+}
+
+/// Fare breakdown from the server, with regular and discounted prices
+class FareBreakdown {
+  final double regular;
+  final double student;
+  final double senior;
+  final List<double> perSegment;
+
+  FareBreakdown({
+    required this.regular,
+    required this.student,
+    required this.senior,
+    this.perSegment = const [],
+  });
+
+  factory FareBreakdown.fromJson(Map<String, dynamic> json) {
+    final perSegmentList = <double>[];
+    if (json['per_segment'] != null && json['per_segment'] is List) {
+      for (final item in json['per_segment'] as List) {
+        perSegmentList.add((item as num?)?.toDouble() ?? 0.0);
+      }
+    }
+    return FareBreakdown(
+      regular: (json['regular'] as num?)?.toDouble() ?? 0.0,
+      student: (json['student'] as num?)?.toDouble() ?? 0.0,
+      senior: (json['senior'] as num?)?.toDouble() ?? 0.0,
+      perSegment: perSegmentList,
+    );
+  }
+
+  @override
+  String toString() =>
+      'FareBreakdown(regular: ₱${regular.toStringAsFixed(2)}, student: ₱${student.toStringAsFixed(2)}, senior: ₱${senior.toStringAsFixed(2)})';
 }
 
 /// Complete suggested route from origin to destination
@@ -135,6 +267,7 @@ class SuggestedRoute {
   final double score; // Lower is better
   final RouteSourceType sourceType;
   final double? osrmMatchPercentage; // If validated against OSRM
+  final FareBreakdown? fareBreakdown; // Server-provided fare breakdown
 
   SuggestedRoute({
     required this.id,
@@ -147,14 +280,102 @@ class SuggestedRoute {
     required this.score,
     required this.sourceType,
     this.osrmMatchPercentage,
+    this.fareBreakdown,
   });
+
+  /// Parse a suggested route from the Laravel server JSON response.
+  ///
+  /// Expected format (`POST /api/v1/routes/find`):
+  /// ```json
+  /// {
+  ///   "id": "uuid",
+  ///   "transfer_count": 0,
+  ///   "total_fare": 13.00,
+  ///   "total_distance_km": 5.42,
+  ///   "total_walking_km": 0.312,
+  ///   "estimated_time_minutes": 18,
+  ///   "score": 42.50,
+  ///   "segments": [ ... ],
+  ///   "fare_breakdown": { "regular": 13.00, "student": 10.40, "senior": 10.40, "per_segment": [13.00] }
+  /// }
+  /// ```
+  ///
+  /// Transfer inference: Laravel only sends "walking" and "jeepney_ride".
+  /// A walking segment between two jeepney_ride segments is re-typed as
+  /// [JourneySegmentType.transfer].
+  factory SuggestedRoute.fromServerJson(Map<String, dynamic> json) {
+    // Parse segments with raw types first
+    final segmentsJson = json['segments'] as List? ?? [];
+    final rawSegments = segmentsJson
+        .map<JourneySegment>(
+          (s) => JourneySegment.fromServerJson(s as Map<String, dynamic>),
+        )
+        .toList();
+
+    // Infer transfer type: a walking segment between two ride segments
+    final segments = <JourneySegment>[];
+    for (int i = 0; i < rawSegments.length; i++) {
+      final seg = rawSegments[i];
+      if (seg.isWalking && i > 0 && i < rawSegments.length - 1) {
+        // Check if previous and next are rides
+        final prevIsRide = rawSegments[i - 1].isJeepneyRide;
+        final nextIsRide = rawSegments[i + 1].isJeepneyRide;
+        if (prevIsRide && nextIsRide) {
+          // Re-create as transfer type
+          segments.add(
+            JourneySegment(
+              route: seg.route,
+              startPoint: seg.startPoint,
+              endPoint: seg.endPoint,
+              startName: seg.startName,
+              endName: seg.endName,
+              type: JourneySegmentType.transfer,
+              distanceKm: seg.distanceKm,
+              fare: seg.fare,
+              estimatedTimeMinutes: seg.estimatedTimeMinutes,
+              walkingPath: seg.walkingPath,
+            ),
+          );
+          continue;
+        }
+      }
+      segments.add(seg);
+    }
+
+    // Parse fare breakdown
+    FareBreakdown? fareBreakdown;
+    if (json['fare_breakdown'] != null &&
+        json['fare_breakdown'] is Map<String, dynamic>) {
+      fareBreakdown = FareBreakdown.fromJson(
+        json['fare_breakdown'] as Map<String, dynamic>,
+      );
+    }
+
+    return SuggestedRoute(
+      id: (json['id'] ?? 'server-${DateTime.now().millisecondsSinceEpoch}')
+          .toString(),
+      segments: segments,
+      totalFare: (json['total_fare'] as num?)?.toDouble() ?? 0.0,
+      totalDistanceKm: (json['total_distance_km'] as num?)?.toDouble() ?? 0.0,
+      totalWalkingDistanceKm:
+          (json['total_walking_km'] as num?)?.toDouble() ?? 0.0,
+      estimatedTimeMinutes:
+          (json['estimated_time_minutes'] as num?)?.toDouble() ?? 0.0,
+      transferCount: (json['transfer_count'] as num?)?.toInt() ?? 0,
+      score: (json['score'] as num?)?.toDouble() ?? 0.0,
+      sourceType: RouteSourceType.hybrid,
+      fareBreakdown: fareBreakdown,
+    );
+  }
 
   /// Get list of jeepney routes used
   List<JeepneyRoute> get routes =>
       segments.where((s) => s.route != null).map((s) => s.route!).toList();
 
-  /// Get route names as display string
-  String get routeNames => routes.map((r) => r.routeNumber).join(' → ');
+  /// Get route names as display string (falls back to name if routeNumber empty)
+  String get routeNames => routes
+      .map((r) => r.routeNumber.isNotEmpty ? r.routeNumber : r.name)
+      .join(' → ');
 
   /// Get transfer point names
   String get transferSummary {
@@ -167,11 +388,14 @@ class SuggestedRoute {
     return transfers.join(', ');
   }
 
-  /// Calculate discounted fare (20% discount for students/seniors/PWD)
-  double get discountedFare => totalFare * 0.80;
+  /// Calculate discounted fare (uses server breakdown if available, else 20%)
+  double get discountedFare => fareBreakdown?.student ?? (totalFare * 0.80);
+
+  /// Get senior/PWD fare (uses server breakdown if available, else 20%)
+  double get seniorFare => fareBreakdown?.senior ?? (totalFare * 0.80);
 
   /// Get discount amount
-  double get discountAmount => totalFare * 0.20;
+  double get discountAmount => totalFare - discountedFare;
 
   /// Whether this is a direct route with no transfers
   bool get isDirectRoute => transferCount == 0;

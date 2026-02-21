@@ -45,6 +45,20 @@ The app uses environment-aware base URLs configured in `ApiService`:
 | POST   | `/logout`   | Logout, revoke token     | `AuthService` |
 | GET    | `/user`     | Get current user profile | `AuthService` |
 
+#### Password Reset
+
+| Method | Endpoint           | Description                        | Used By       |
+| ------ | ------------------ | ---------------------------------- | ------------- |
+| POST   | `/password/forgot` | Request 6-digit reset code (email) | `AuthService` |
+| POST   | `/password/reset`  | Reset password with code           | `AuthService` |
+
+**Password Reset Details:**
+
+- 6-digit code, 15-minute expiry, single-use
+- Rate limits: 3 forgot requests/hr, 5 reset attempts/hr per IP
+- Password rules: min 8 chars, lowercase, uppercase, number
+- Response codes: 200 (success), 422 (invalid/expired), 429 (rate limited)
+
 #### Fare Settings
 
 | Method | Endpoint          | Description           | Used By               |
@@ -142,6 +156,8 @@ Manages the full auth lifecycle with Laravel Sanctum.
 - `isLoggedIn()` → bool (checks token validity)
 - `getToken()` → String?
 - `getCachedUser()` → `UserModel?`
+- `forgotPassword(email)` → sends 6-digit code
+- `resetPassword(email, code, newPassword, confirm)` → resets password
 
 ---
 
@@ -396,6 +412,50 @@ Text(context.tr('welcome'))  // "Welcome" / "Maligayang pagdating" / "Maayong pa
 
 ---
 
+### 14. `ConnectivityService` — Network Monitoring
+
+**File:** `lib/services/connectivity_service.dart`
+**Pattern:** Singleton, ChangeNotifier
+
+Monitors network connectivity state and notifies the UI.
+
+**Key features:**
+
+- Uses `connectivity_plus` v5.0.2 stream
+- Exposes `isOnline` boolean
+- Triggers `notifyListeners()` on status change
+- Registered in Provider tree via `AppProviderScope`
+
+**Key methods:**
+
+- `isOnline` → `bool` (current connectivity status)
+- `dispose()` → cleanup stream subscription
+
+---
+
+### 15. `RouteStorage` — Offline Route Cache
+
+**File:** `lib/database/route_storage.dart`
+**Pattern:** Singleton
+
+SQLite database (`lejeepney_routes.db`) for persistent offline route storage.
+
+**Tables:**
+
+- `routes` — 12 columns (id, code, name, description, path_json, waypoints_json, fare, color, is_active, from_location, to_location, distance_km)
+- `sync_meta` — key-value store for last sync timestamps
+
+**Key methods:**
+
+- `saveRoutes(routes)` → batch insert all routes
+- `loadRoutes()` → `List<JeepneyRoute>` (full route data with paths/waypoints)
+- `getLastSyncTime()` → `DateTime?`
+- `setLastSyncTime(time)` → update sync timestamp
+
+**Performance:** ~470ms to load 50 routes from disk
+
+---
+
 ## Data Flow Diagrams
 
 ### Authentication Flow
@@ -410,6 +470,21 @@ LoginScreen → AuthRepository.login()
   → Navigate to MainNavigation
 ```
 
+### Password Reset Flow
+
+```
+ForgotPasswordScreen → AuthRepository.forgotPassword()
+  → AuthService.forgotPassword(email)
+    → POST /api/password/forgot
+    → Email sent with 6-digit code (15-min expiry)
+  → Navigate to ResetPasswordScreen
+
+ResetPasswordScreen → AuthRepository.resetPassword()
+  → AuthService.resetPassword(email, code, password, confirm)
+    → POST /api/password/reset
+    → Success → Navigate to LoginScreen
+```
+
 ### Route Search Flow
 
 ```
@@ -420,6 +495,19 @@ SearchScreen → AppSearchController.calculateRoute()
     → RouteMatcher.matchRoutes() → RouteMatchResults
     → MultiTransferMatcher.findRoutes() → MultiTransferRoutes
   → Display results in RouteListPanel / SuggestedRoutesModal
+```
+
+### Offline Route Loading Flow
+
+```
+RouteRepository.loadRoutes():
+  1. Memory cache → return if available
+  2. RouteStorage.loadRoutes() → SQLite disk load (~470ms)
+  3. Return routes immediately to UI
+  4. Background: if online + cooldown expired (10 min):
+       → ApiService.fetchAllRoutes() → fresh data
+       → RouteStorage.saveRoutes() → update disk cache
+       → Notify listeners → UI auto-updates
 ```
 
 ### Activity Sync Flow

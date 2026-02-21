@@ -4,6 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_dimensions.dart';
 
+// Re-export offline banner so it's available via common_widgets.dart
+export 'offline_banner.dart';
+
 // ========== PRIMARY BUTTON ==========
 class AppButton extends StatelessWidget {
   final String text;

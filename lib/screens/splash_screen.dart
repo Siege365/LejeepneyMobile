@@ -18,7 +18,10 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeAndNavigate();
+    // Defer initialization until after first frame to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeAndNavigate();
+    });
   }
 
   Future<void> _initializeAndNavigate() async {

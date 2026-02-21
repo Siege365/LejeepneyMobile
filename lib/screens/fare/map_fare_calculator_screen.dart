@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -737,7 +738,10 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
         'continue_straight=false&steps=true',
       );
 
-      debugPrint('OSRM URL: $url');
+      // Only log URL in debug mode for non-network errors
+      if (kDebugMode) {
+        debugPrint('OSRM URL: $url');
+      }
 
       final response = await http.get(url);
 
@@ -784,12 +788,26 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
         debugPrint('OSRM API error: ${response.statusCode}');
       }
     } catch (e) {
-      // If OSRM fails, show error
-      debugPrint('Route error: $e');
+      // Only log non-network errors
+      if (!e.toString().contains('SocketException') &&
+          !e.toString().contains('Failed host lookup')) {
+        debugPrint('Route error: $e');
+      }
+
       if (mounted) {
+        // User-friendly error message
+        String errorMessage;
+        if (e.toString().contains('SocketException') ||
+            e.toString().contains('Failed host lookup') ||
+            e.toString().contains('ClientException')) {
+          errorMessage = 'Network failed - Connect to Internet';
+        } else {
+          errorMessage = 'Could not find route';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not find route: $e'),
+            content: Text(errorMessage),
             backgroundColor: AppColors.error,
           ),
         );

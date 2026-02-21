@@ -39,7 +39,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   TicketPriority _selectedPriority = TicketPriority.medium;
   bool _isSubmitting = false;
   bool _hasSubmitted = false; // Prevent duplicate submissions
-  String? _autoSelectReason;
   bool _userManuallyChanged = false;
 
   @override
@@ -70,7 +69,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       setState(() {
         _selectedType = selector!.type;
         _selectedPriority = selector.priority;
-        _autoSelectReason = selector.autoSelectReason;
         _userManuallyChanged =
             false; // Auto-selected, message analysis can still refine
       });
@@ -95,7 +93,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         setState(() {
           _selectedType = selector.type;
           _selectedPriority = escalatedPriority;
-          _autoSelectReason = selector.autoSelectReason;
         });
       }
     }

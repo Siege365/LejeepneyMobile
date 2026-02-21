@@ -239,7 +239,7 @@ class _SearchScreenState extends State<SearchScreen> {
         setState(() {
           _isLoadingRoutes = false;
           _routesErrorMessage =
-              'Failed to load routes. Please check your internet connection.';
+              'Routes unavailable offline. Connect to WiFi at least once to cache routes.';
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -702,7 +702,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Network error. Please check your connection.'),
+          content: const Text('Network failed - Connect to Internet'),
           backgroundColor: Colors.red,
           action: SnackBarAction(
             label: 'Retry',

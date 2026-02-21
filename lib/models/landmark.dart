@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart' show debugPrint;
-
 class Landmark {
   final int id;
   final String name;

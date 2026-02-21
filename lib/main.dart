@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -10,8 +11,27 @@ import 'services/ticket_notification_service.dart';
 import 'services/settings_service.dart';
 import 'services/fare_settings_service.dart';
 
+/// Global override to accept all HTTPS certificates in debug mode.
+/// Required for ngrok tunnels on physical Android devices.
+class _DebugHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Allow ngrok HTTPS connections on physical devices in debug mode
+  if (kDebugMode) {
+    HttpOverrides.global = _DebugHttpOverrides();
+    debugPrint(
+      '[SSL] Global HttpOverrides installed — accepting all certs in debug mode',
+    );
+  }
 
   // Initialize services in background (non-blocking)
   RecentActivityServiceV2.initialize().catchError((error) {

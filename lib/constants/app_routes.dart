@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/sign_in_screen.dart';
+import '../screens/auth/forgot_password_screen.dart';
+import '../screens/auth/reset_password_screen.dart';
 import '../screens/main_navigation.dart';
 import '../screens/fare/fare_calculator_screen.dart';
 import '../screens/fare/map_fare_calculator_screen.dart';
@@ -17,6 +19,8 @@ class AppRoutes {
   static const String splash = '/';
   static const String login = '/login';
   static const String signIn = '/sign-in';
+  static const String forgotPassword = '/forgot-password';
+  static const String resetPassword = '/reset-password';
   static const String home = '/home';
   static const String main = '/main';
 
@@ -46,6 +50,14 @@ class AppRouter {
 
       case AppRoutes.signIn:
         return _buildRoute(const SignInScreen(), settings);
+
+      case AppRoutes.forgotPassword:
+        return _buildRoute(const ForgotPasswordScreen(), settings);
+
+      case AppRoutes.resetPassword:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final email = args?['email'] as String? ?? '';
+        return _buildRoute(ResetPasswordScreen(email: email), settings);
 
       case AppRoutes.main:
       case AppRoutes.home:

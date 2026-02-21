@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import '../models/jeepney_route.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import '../services/route_calculation_service.dart';
 import '../utils/transit_routing/transit_routing.dart';
 
 /// Search result from place search
@@ -31,7 +32,7 @@ class PlaceResult {
 class SearchController extends ChangeNotifier {
   final ApiService _apiService = ApiService();
   final LocationService _locationService = LocationService();
-  final HybridTransitRouter _hybridRouter;
+  final RouteCalculationService _routeCalcService = RouteCalculationService();
 
   // Location state
   LatLng? _currentLocation;
@@ -57,11 +58,7 @@ class SearchController extends ChangeNotifier {
   List<SuggestedRoute> _calculatedRoutes = [];
   HybridRoutingResult? _hybridResult;
 
-  SearchController({HybridRoutingConfig? config})
-    : _hybridRouter = HybridTransitRouter(
-        config:
-            config ?? const HybridRoutingConfig(maxResults: 5, maxTransfers: 2),
-      );
+  SearchController({HybridRoutingConfig? config});
 
   // Getters
   LatLng? get currentLocation => _currentLocation;
@@ -248,7 +245,10 @@ class SearchController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Calculate route to destination
+  /// Calculate route to destination.
+  /// Uses server-first strategy via RouteCalculationService:
+  /// 1. Try server API (fast, multi-transfer)
+  /// 2. Fall back to local graph routing if server unavailable
   Future<void> calculateRoute() async {
     if (_currentLocation == null || _searchedLocation == null) {
       return;
@@ -258,15 +258,25 @@ class SearchController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _hybridRouter.findRoutes(
+      final result = await _routeCalcService.calculateRoutes(
         origin: _currentLocation!,
         destination: _searchedLocation!,
-        jeepneyRoutes: _routes,
-        osrmPath: null,
       );
 
-      _calculatedRoutes = result.suggestedRoutes;
-      _hybridResult = result;
+      if (result.success) {
+        _calculatedRoutes = result.hybridSuggestedRoutes;
+        _hybridResult = result.hybridResult;
+        debugPrint(
+          '[SearchController] Got ${_calculatedRoutes.length} routes '
+          '(from ${result.fromServer ? "server" : "local"})',
+        );
+      } else {
+        debugPrint(
+          '[SearchController] Route calc failed: ${result.errorMessage}',
+        );
+        _calculatedRoutes = [];
+        _hybridResult = null;
+      }
     } catch (e) {
       debugPrint('Route calculation error: $e');
       _calculatedRoutes = [];

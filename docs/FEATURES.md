@@ -10,6 +10,8 @@ This document describes every user-facing feature in LeJeepney.
 
 - [screens/auth/login_screen.dart](../lib/screens/auth/login_screen.dart)
 - [screens/auth/sign_in_screen.dart](../lib/screens/auth/sign_in_screen.dart)
+- [screens/auth/forgot_password_screen.dart](../lib/screens/auth/forgot_password_screen.dart)
+- [screens/auth/reset_password_screen.dart](../lib/screens/auth/reset_password_screen.dart)
 - [services/auth_service.dart](../lib/services/auth_service.dart)
 - [repositories/auth_repository.dart](../lib/repositories/auth_repository.dart)
 
@@ -28,6 +30,15 @@ Users can register and log in via **Laravel Sanctum** token-based authentication
 
 - Name, email, phone, password
 - Server-side validation with error messages displayed inline
+
+**Password Reset:**
+
+- Enter email → receive 6-digit code via email
+- Enter code + new password → password reset
+- Code expires after 15 minutes, single-use
+- Rate limited: 3 forgot requests/hr, 5 reset attempts/hr
+- Password rules: minimum 8 chars, lowercase, uppercase, number
+- Anti-enumeration: generic success message regardless of email existence
 
 **Security:**
 
@@ -366,11 +377,19 @@ Maps are rendered using **flutter_map** with **OpenStreetMap** tiles.
 
 - Default center: Davao City (7.0731°N, 125.6128°E)
 - Zoom range: 10–18
-- Resilient tile provider with error handling
+- Resilient tile provider with persistent caching
 - Walking path polylines (dotted lines)
 - Jeepney route polylines (colored solid lines)
 - Custom markers for origin, destination, landmarks
 - GPS location tracking
+
+**Map tile caching:**
+
+- Persistent disk cache via `flutter_cache_manager`
+- Maximum 1000 tiles stored, 30-day expiry
+- Cache-first loading (instant for previously viewed areas)
+- Fallback: 1x1 transparent PNG when tile unavailable offline
+- No error log spam when tiles fail to fetch
 
 **Walking routes:**
 
@@ -378,3 +397,52 @@ Maps are rendered using **flutter_map** with **OpenStreetMap** tiles.
 - Fallback: OSRM foot profile
 - Final fallback: Straight line
 - LRU cache (50 entries) to avoid redundant API calls
+
+---
+
+## 11. Offline-First Architecture
+
+### Files
+
+- [database/route_storage.dart](../lib/database/route_storage.dart)
+- [services/connectivity_service.dart](../lib/services/connectivity_service.dart)
+- [widgets/common/offline_banner.dart](../lib/widgets/common/offline_banner.dart)
+- [repositories/route_repository.dart](../lib/repositories/route_repository.dart)
+- [utils/resilient_tile_provider.dart](../lib/utils/resilient_tile_provider.dart)
+
+### Description
+
+The app works without an internet connection for its core features.
+
+**Route caching:**
+
+- All 50 jeepney routes (~1.3MB) cached in SQLite (`lejeepney_routes.db`)
+- Tables: `routes` (12 columns with path_json, waypoints_json) + `sync_meta` (timestamps)
+- Loading order: Memory → SQLite disk → API
+- Background sync with 10-minute cooldown when online
+- Typical load time: ~470ms offline, ~750ms online
+
+**Connectivity monitoring:**
+
+- `ConnectivityService` uses `connectivity_plus` v5.0.2
+- Exposed as `ChangeNotifier` via Provider
+- Floating banner at top of `MainNavigation` when offline
+- Animated slide-in: "You're offline — Connect to internet for full access"
+
+**Offline capabilities:**
+
+| Feature           | Offline Behavior                                   |
+| ----------------- | -------------------------------------------------- |
+| Route search      | Uses cached routes + local graph-based pathfinding |
+| Fare calculator   | Works fully offline (fare rates cached)            |
+| Map display       | Shows previously cached tiles                      |
+| Landmarks         | Shows cached data or "Network failed" message      |
+| Activity tracking | Stored in SQLite, synced when reconnected          |
+| Password reset    | Requires internet (shows network error)            |
+
+**Error handling:**
+
+- Network errors detected (SocketException, ClientException, Failed host lookup)
+- User-friendly messages instead of raw exceptions
+- Consistent messaging: "Network failed — Connect to Internet"
+- Smart empty states: wifi_off icon for network errors, search_off for empty results

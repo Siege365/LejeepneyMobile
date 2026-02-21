@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../utils/transit_routing/transit_routing.dart';
+import '../widgets/common/offline_banner.dart';
 import 'home/home_screen.dart';
 import 'search/search_screen.dart';
 import 'fare/fare_calculator_screen.dart';
@@ -94,24 +95,34 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position:
-                  Tween<Offset>(
-                    begin: const Offset(0.05, 0),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(parent: animation, curve: Curves.easeInOut),
-                  ),
-              child: child,
-            ),
-          );
-        },
-        child: _screens[_currentIndex],
+      body: Stack(
+        children: [
+          // Main content
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position:
+                      Tween<Offset>(
+                        begin: const Offset(0.05, 0),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeInOut,
+                        ),
+                      ),
+                  child: child,
+                ),
+              );
+            },
+            child: _screens[_currentIndex],
+          ),
+          // Floating offline banner
+          Positioned(top: 0, left: 0, right: 0, child: const OfflineBanner()),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(

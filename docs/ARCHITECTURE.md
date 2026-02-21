@@ -11,19 +11,17 @@ lib/
 │   ├── app_routes.dart                #   Route names + AppRouter + NavigationService
 │   ├── app_strings.dart               #   All hardcoded English text strings
 │   ├── app_theme.dart                 #   Material 3 theme configuration
-│   ├── constants.dart                 #   Barrel file for all constants
 │   └── map_constants.dart             #   Map center (Davao), zoom levels, tile URLs
 ├── controllers/                       # UI state controllers (ChangeNotifier)
 │   ├── controllers.dart               #   Barrel file
 │   ├── fare_calculator_controller.dart #  Fare calculator state management
 │   └── search_controller.dart         #   Search/route finding state management
-├── database/                          # Local SQLite database
+├── database/                          # Local SQLite databases
 │   ├── activity_database.dart         #   Recent activity CRUD operations
-│   └── database_helper.dart           #   DB initialization helper
+│   └── route_storage.dart             #   Offline route caching (lejeepney_routes.db)
 ├── models/                            # Data models
 │   ├── jeepney_route.dart             #   JeepneyRoute + Waypoint models
 │   ├── landmark.dart                  #   Landmark + LandmarkCategory models
-│   ├── models.dart                    #   Barrel file
 │   ├── recent_activity_model.dart     #   RecentActivityModel (SQLite + API)
 │   ├── support_ticket.dart            #   SupportTicket, TicketReply, enums
 │   └── user_model.dart                #   UserModel for auth
@@ -37,8 +35,8 @@ lib/
 │   └── route_repository.dart          #   Jeepney route data access
 ├── screens/                           # UI screens
 │   ├── splash_screen.dart             #   Boot screen — pre-loads all data
-│   ├── main_navigation.dart           #   Bottom nav with 5 tabs
-│   ├── auth/                          #   Login + Registration screens
+│   ├── main_navigation.dart           #   Bottom nav with 5 tabs + offline banner
+│   ├── auth/                          #   Login, Registration, Password Reset screens
 │   ├── fare/                          #   Fare calculator + map screen
 │   ├── home/                          #   Home dashboard
 │   ├── landmarks/                     #   Landmark directory
@@ -49,14 +47,15 @@ lib/
 │   ├── activity_sync_manager.dart     #   Local ↔ server activity sync
 │   ├── api_service.dart               #   Central HTTP client (Laravel)
 │   ├── app_data_preloader.dart        #   Splash screen data pre-loading
-│   ├── auth_service.dart              #   Laravel Sanctum auth
+│   ├── auth_service.dart              #   Laravel Sanctum auth + password reset
+│   ├── connectivity_service.dart      #   Network status monitoring (ChangeNotifier)
 │   ├── fare_settings_service.dart     #   Admin-configurable fare rates
+│   ├── http_client_factory.dart       #   SSL-safe HTTP client factory
 │   ├── localization_service.dart      #   Multi-language translations
 │   ├── location_service.dart          #   GPS + geocoding + place search
 │   ├── recent_activity_api_service.dart #  Activity REST API client
 │   ├── recent_activity_service_v2.dart  #  Activity tracking facade
 │   ├── route_calculation_service.dart #   Main route calculation orchestrator
-│   ├── services.dart                  #   Barrel file
 │   ├── settings_service.dart          #   User preferences (ChangeNotifier)
 │   ├── support_service.dart           #   Support ticket API client
 │   ├── ticket_notification_service.dart # Background ticket notification polling
@@ -64,7 +63,7 @@ lib/
 ├── utils/                             # Utility functions
 │   ├── multi_transfer_matcher.dart    #   Legacy multi-transfer route finder
 │   ├── page_transitions.dart          #   Custom page transition animations
-│   ├── resilient_tile_provider.dart   #   Fault-tolerant map tile loading
+│   ├── resilient_tile_provider.dart   #   Fault-tolerant map tile loading + caching
 │   ├── route_display_helpers.dart     #   Route formatting utilities
 │   ├── route_matcher.dart             #   Legacy route-to-path matching
 │   ├── security_utils.dart            #   Input sanitization + validation
@@ -80,21 +79,19 @@ lib/
 └── widgets/                           # Reusable UI components
     ├── common/                        #   Shared widgets
     │   ├── common_widgets.dart        #     Section headers, cards, etc.
+    │   ├── offline_banner.dart        #     Floating offline status banner
     │   └── tutorial_overlay.dart      #     First-time user tutorial
     ├── map/                           #   Map-related widgets
     │   ├── app_map.dart               #     Main map widget wrapper
-    │   ├── map_markers.dart           #     Custom map marker builders
-    │   └── map_widgets.dart           #     Barrel file
+    │   └── map_markers.dart           #     Custom map marker builders
     ├── route/                         #   Route display widgets
     │   ├── direct_route_card.dart     #     Single-route result card
     │   ├── multi_transfer_route_card.dart # Multi-transfer route card
     │   ├── route_display_widgets.dart #     Route info formatting
-    │   ├── route_widgets.dart         #     Barrel file
     │   ├── routes_list_panel.dart     #     Scrollable route results list
     │   └── suggested_routes_modal.dart #    Bottom sheet for route details
     ├── route_list_item.dart           #   Individual route list row
-    ├── travel_history_item.dart       #   Recent activity list row
-    └── widgets.dart                   #   Barrel file
+    └── travel_history_item.dart       #   Recent activity list row
 ```
 
 ---
@@ -111,6 +108,7 @@ The app uses the **Provider** package for dependency injection and reactive stat
 MultiProvider
 ├── ChangeNotifierProvider<SettingsService>      (singleton)
 ├── ChangeNotifierProvider<LocationService>      (singleton)
+├── ChangeNotifierProvider<ConnectivityService>  (network monitoring)
 ├── ChangeNotifierProvider<AuthRepository>       (BaseRepository)
 ├── ChangeNotifierProvider<RouteRepository>      (BaseRepository)
 ├── ChangeNotifierProvider<LandmarkRepository>   (BaseRepository)
@@ -163,10 +161,11 @@ Cross-cutting services use the singleton pattern:
 | `AppDataPreloader`          | Singleton | Splash screen data loading        |
 | `ActivitySyncManager`       | Singleton | Offline ↔ server sync             |
 | `TicketNotificationService` | Singleton | Background notification polling   |
+| `ConnectivityService`       | Singleton | Network status (ChangeNotifier)   |
 
 ### 4. Barrel Files
 
-Every folder has a barrel file (e.g., `models.dart`, `services.dart`, `widgets.dart`) that re-exports its contents for cleaner imports. However, most screens import files directly rather than through barrel files.
+The `transit_routing/transit_routing.dart` barrel file re-exports the entire routing subsystem and is used by 9+ files. The `controllers/controllers.dart` and `repositories/repositories.dart` barrels are moderately used. Most screens import individual files directly.
 
 ---
 
@@ -276,15 +275,69 @@ User performs action (route calc, fare calc, etc.)
 
 ## Key Architectural Decisions
 
-| Decision                       | Rationale                                                     |
-| ------------------------------ | ------------------------------------------------------------- |
-| OpenStreetMap over Google Maps | Google Maps billing not supported in Philippines              |
-| OSRM for walking routes        | Free, self-hostable, no API key needed                        |
-| Pre-load data at splash        | Eliminates loading spinners throughout the app                |
-| Background graph build         | Transit graph is expensive; built async so splash is fast     |
-| Hybrid routing engine          | Combines graph pathfinding with OSRM for best accuracy        |
-| Legacy matchers as fallback    | Backward compatibility with original matching algorithms      |
-| SQLite for activities          | Offline-first; syncs to server when connectivity is available |
-| Provider over BLoC/Riverpod    | Simpler mental model; sufficient for this app's complexity    |
-| Singleton services             | Shared state across screens without Provider boilerplate      |
-| Result<T> pattern              | Type-safe error handling without try/catch everywhere         |
+| Decision                       | Rationale                                                      |
+| ------------------------------ | -------------------------------------------------------------- |
+| OpenStreetMap over Google Maps | Google Maps billing not supported in Philippines               |
+| OSRM for walking routes        | Free, self-hostable, no API key needed                         |
+| Pre-load data at splash        | Eliminates loading spinners throughout the app                 |
+| Background graph build         | Transit graph is expensive; built async so splash is fast      |
+| Hybrid routing engine          | Combines graph pathfinding with OSRM for best accuracy         |
+| Legacy matchers as fallback    | Backward compatibility with original matching algorithms       |
+| SQLite for activities          | Offline-first; syncs to server when connectivity is available  |
+| SQLite for route caching       | Offline-first; routes load from disk when API unreachable      |
+| Map tile persistent caching    | Pre-viewed tiles available offline (1000 tiles, 30-day expiry) |
+| Connectivity monitoring        | Reactive UI feedback when network status changes               |
+| Provider over BLoC/Riverpod    | Simpler mental model; sufficient for this app's complexity     |
+| Singleton services             | Shared state across screens without Provider boilerplate       |
+| Result<T> pattern              | Type-safe error handling without try/catch everywhere          |
+
+---
+
+## Offline-First Architecture
+
+The app is designed to work without an internet connection for its core features.
+
+### Data Loading Strategy
+
+```
+Memory Cache → SQLite Disk → API (with background sync)
+```
+
+### Route Data Flow (Offline-First)
+
+```
+RouteRepository.loadRoutes():
+  1. Check memory cache → return if available
+  2. Load from SQLite (RouteStorage) → return immediately
+  3. Background: sync from API if online + cooldown expired (10 min)
+     └── Save fresh data to SQLite for next offline use
+```
+
+### Map Tile Caching
+
+```
+ResilientTileProvider → CachedTileImage:
+  1. Check flutter_cache_manager disk cache → return if cached
+  2. Fetch from OpenStreetMap tile server → cache for 30 days
+  3. On network failure → return 1x1 transparent PNG fallback
+  Limits: 1000 tiles max, 30-day expiry
+```
+
+### Connectivity Monitoring
+
+```
+ConnectivityService (ChangeNotifier):
+  └── Listens to connectivity_plus stream
+  └── Exposes isOnline boolean
+  └── OfflineBanner widget (floating overlay in MainNavigation)
+       └── Animated slide-in/out: "You're offline — Connect to internet for full access"
+```
+
+### Offline Error Handling
+
+All screens handle network errors gracefully:
+
+- **Route calculation**: Falls back to local graph-based routing
+- **Search/Landmarks**: Shows wifi_off icon with "Network failed — Connect to Internet"
+- **Map tiles**: Serves cached tiles, transparent fallback for missing ones
+- **Activity tracking**: Queues in SQLite, syncs when reconnected

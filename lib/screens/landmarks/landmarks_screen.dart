@@ -131,15 +131,29 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint('Landmarks Error: $e');
+      // Only log non-network errors (suppress offline messages)
+      if (!e.toString().contains('SocketException') &&
+          !e.toString().contains('Failed host lookup')) {
+        debugPrint('Landmarks Error: $e');
+      }
 
       if (!mounted) return;
+
+      // User-friendly error message
+      String errorMessage;
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('Failed host lookup') ||
+          e.toString().contains('ClientException')) {
+        errorMessage = 'Network failed - Connect to Internet';
+      } else {
+        errorMessage = 'Failed to load landmarks';
+      }
 
       setState(() {
         _isUsingApi = false;
         _apiLandmarks = [];
         _isLoading = false;
-        _errorMessage = 'Failed to load landmarks';
+        _errorMessage = errorMessage;
       });
     }
   }
@@ -452,13 +466,17 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.search_off,
+                            // Show wifi icon if error exists (network issue)
+                            _errorMessage != null
+                                ? Icons.wifi_off
+                                : Icons.search_off,
                             size: 60,
                             color: AppColors.gray.withValues(alpha: 0.5),
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'No landmarks found',
+                            // Show error message if exists, otherwise "No landmarks found"
+                            _errorMessage ?? 'No landmarks found',
                             style: TextStyle(
                               fontSize: 16,
                               color: AppColors.gray,

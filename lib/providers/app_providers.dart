@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 import '../repositories/repositories.dart';
 import '../controllers/controllers.dart';
+import '../services/connectivity_service.dart';
 import '../services/location_service.dart';
 import '../services/settings_service.dart';
 
@@ -16,6 +17,9 @@ List<SingleChildWidget> get appProviders => [
 
   // Core Services (singletons)
   Provider<LocationService>(create: (_) => LocationService()),
+  ChangeNotifierProvider<ConnectivityService>(
+    create: (_) => ConnectivityService(),
+  ),
 
   // Repositories (ChangeNotifierProvider for reactive updates)
   ChangeNotifierProvider<AuthRepository>(create: (_) => AuthRepository()),
@@ -66,6 +70,10 @@ extension RepositoryContext on BuildContext {
 
   /// Get LocationService
   LocationService get locationService => read<LocationService>();
+
+  /// Get ConnectivityService
+  ConnectivityService get connectivityService => read<ConnectivityService>();
+  ConnectivityService watchConnectivity() => watch<ConnectivityService>();
 
   /// Get FareCalculatorController
   FareCalculatorController get fareCalculator =>

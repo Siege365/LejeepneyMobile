@@ -3,9 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
 import '../models/landmark.dart';
 import '../models/jeepney_route.dart';
+import '../utils/transit_routing/models.dart';
 import 'fare_settings_service.dart';
+import 'http_client_factory.dart';
 
 class ApiService {
   // ========== CONFIGURE YOUR API URL HERE ==========
@@ -54,8 +57,8 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  // HTTP client with timeout
-  final http.Client _client = http.Client();
+  // HTTP client with timeout (SSL-safe for ngrok in debug mode)
+  final http.Client _client = createHttpClient();
   static const Duration _timeout = Duration(
     seconds: 90,
   ); // Increased for large route data
@@ -109,6 +112,12 @@ class ApiService {
               .map((json) => Landmark.fromJson(json))
               .toList();
         }
+      }
+
+      // 404 = endpoint doesn't exist on your Laravel API yet
+      if (response.statusCode == 404) {
+        debugPrint('[API] ⚠️ Landmarks endpoint not implemented on server yet');
+        throw ApiException('Landmarks API not available (404)');
       }
 
       throw ApiException('Failed to fetch landmarks: ${response.statusCode}');
@@ -267,6 +276,12 @@ class ApiService {
           }
         }
 
+        // 404 = endpoint doesn't exist on your Laravel API yet
+        if (response.statusCode == 404) {
+          debugPrint('[API] ⚠️ Routes endpoint not implemented on server yet');
+          throw ApiException('Routes API not available (404)');
+        }
+
         throw ApiException(
           'Failed to fetch routes (status: ${response.statusCode})',
         );
@@ -365,6 +380,129 @@ class ApiService {
     } catch (e) {
       if (e is ApiException) rethrow;
       throw ApiException('Network error: $e');
+    }
+  }
+
+  // ========== ENHANCED ROUTE FINDING (V2) ==========
+
+  /// Find routes between two points and return as SuggestedRoutes.
+  ///
+  /// Calls `POST /api/v1/routes/find` — Laravel returns segment-based
+  /// multi-transfer routes with fare breakdown, scored and sorted.
+  ///
+  /// Throws [ApiException] on failure so callers can fall back to local routing.
+  Future<List<SuggestedRoute>> findRoutesV2({
+    required double fromLat,
+    required double fromLng,
+    required double toLat,
+    required double toLng,
+    double tolerance = 0.5,
+    double transferWalkMax = 0.3,
+    bool includeWalkingPaths = false,
+  }) async {
+    try {
+      debugPrint('[API] findRoutesV2: ($fromLat,$fromLng) → ($toLat,$toLng)');
+
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/routes/find'),
+            headers: _getHeaders(),
+            body: json.encode({
+              'from_lat': fromLat,
+              'from_lng': fromLng,
+              'to_lat': toLat,
+              'to_lng': toLng,
+              'tolerance': tolerance,
+              'transfer_walk_max': transferWalkMax,
+              'include_walking_paths': includeWalkingPaths,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final body = json.decode(response.body);
+        if (body['success'] == true && body['data'] != null) {
+          final dataList = body['data'] as List;
+          if (dataList.isEmpty) return [];
+
+          debugPrint(
+            '[API] findRoutesV2: ${dataList.length} routes from server',
+          );
+          return dataList
+              .map(
+                (item) =>
+                    SuggestedRoute.fromServerJson(item as Map<String, dynamic>),
+              )
+              .toList();
+        }
+      }
+
+      if (response.statusCode == 404) {
+        throw ApiException('Route finding endpoint not available (404)');
+      }
+
+      throw ApiException(
+        'Server route finding failed (status: ${response.statusCode})',
+      );
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException('Network error during route finding: $e');
+    }
+  }
+
+  // ========== WALKING ROUTE PROXY ==========
+
+  /// Fetch a walking route via the server proxy.
+  ///
+  /// The server calls ORS/OSRM with its own API key, so the client
+  /// doesn't need to expose any keys.
+  ///
+  /// Calls `POST /api/v1/walking-route`
+  /// Returns `{path: List<LatLng>, distance_km: double, duration_minutes: double}`.
+  /// Returns a list of LatLng points, or throws on failure.
+  Future<List<LatLng>> fetchWalkingRoute({
+    required double fromLat,
+    required double fromLng,
+    required double toLat,
+    required double toLng,
+  }) async {
+    try {
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/walking-route'),
+            headers: _getHeaders(),
+            body: json.encode({
+              'from_lat': fromLat,
+              'from_lng': fromLng,
+              'to_lat': toLat,
+              'to_lng': toLng,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final body = json.decode(response.body);
+        if (body['success'] == true && body['data'] != null) {
+          final data = body['data'] as Map<String, dynamic>;
+          final pathList = data['path'] as List? ?? [];
+          return pathList.map<LatLng>((c) {
+            if (c is Map) {
+              return LatLng(
+                (c['lat'] as num?)?.toDouble() ?? 0.0,
+                (c['lng'] as num?)?.toDouble() ?? 0.0,
+              );
+            }
+            return LatLng(0, 0);
+          }).toList();
+        }
+      }
+
+      throw ApiException(
+        'Walking route proxy failed (status: ${response.statusCode})',
+      );
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException('Walking route proxy error: $e');
     }
   }
 

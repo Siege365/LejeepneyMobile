@@ -3,12 +3,14 @@
 // can access cached data instantly without waiting for API calls.
 //
 // Loads in parallel: routes, landmarks, auth, fare settings.
-// Pre-builds transit routing graph for fast direction calculations.
+// Transit graph is built lazily (on first local routing request)
+// since server-side routing is tried first.
 
 import 'package:flutter/foundation.dart';
 import '../repositories/repositories.dart';
 import '../models/jeepney_route.dart';
 import '../utils/transit_routing/transit_routing.dart';
+import 'api_service.dart';
 import 'fare_settings_service.dart';
 
 /// Singleton service that pre-loads all app data during splash.
@@ -20,11 +22,15 @@ class AppDataPreloader {
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
 
+  // Whether server routing is available (checked during init)
+  bool _serverRoutingAvailable = false;
+  bool get serverRoutingAvailable => _serverRoutingAvailable;
+
   // Repository references for cached data access
   RouteRepository? _routeRepo;
   LandmarkRepository? _landmarkRepo;
 
-  // Shared transit router with pre-built graph
+  // Shared transit router with pre-built graph (lazy)
   HybridTransitRouter? _hybridRouter;
   Future<void>? _graphBuildFuture;
 
@@ -38,6 +44,13 @@ class AppDataPreloader {
   Future<void> ensureGraphReady() async {
     if (_graphBuildFuture != null) {
       await _graphBuildFuture;
+      return;
+    }
+
+    // If graph hasn't been built yet, build it now (lazy init)
+    if (_hybridRouter == null && (_routeRepo?.hasRoutes ?? false)) {
+      debugPrint('[AppDataPreloader] Lazy-building transit graph...');
+      await _buildTransitGraph(_routeRepo!.routes);
     }
   }
 
@@ -62,7 +75,7 @@ class AppDataPreloader {
 
   /// Pre-load all critical data in parallel.
   /// Called once during splash screen.
-  /// Navigation-critical data loads first; transit graph builds in background.
+  /// Navigation-critical data loads first; transit graph is deferred.
   Future<void> initialize({
     required RouteRepository routeRepository,
     required LandmarkRepository landmarkRepository,
@@ -98,15 +111,41 @@ class AppDataPreloader {
       '[AppDataPreloader] Critical data loaded in ${stopwatch.elapsedMilliseconds}ms',
     );
 
-    // Pre-build transit graph in the BACKGROUND (non-blocking)
-    // User can navigate immediately; graph will be ready by the time they need it
-    if (routeRepository.hasRoutes) {
+    // Check if server routing is available (quick health check)
+    await _checkServerRouting();
+
+    // Only pre-build transit graph if server routing is NOT available.
+    // If server routing works, graph is built lazily on first local fallback.
+    if (!_serverRoutingAvailable && routeRepository.hasRoutes) {
+      debugPrint(
+        '[AppDataPreloader] Server routing unavailable — building transit graph',
+      );
       _graphBuildFuture = _buildTransitGraph(routeRepository.routes).then((_) {
         debugPrint(
           '[AppDataPreloader] Total including graph: ${stopwatch.elapsedMilliseconds}ms',
         );
         _graphBuildFuture = null;
       });
+    } else {
+      debugPrint(
+        '[AppDataPreloader] Server routing available — skipping graph pre-build '
+        '(will lazy-build if needed)',
+      );
+    }
+  }
+
+  /// Quick check if the server's route-finding endpoint is reachable.
+  /// Non-blocking — sets the flag for future use.
+  Future<void> _checkServerRouting() async {
+    try {
+      final isReachable = await ApiService().healthCheck();
+      _serverRoutingAvailable = isReachable;
+      debugPrint(
+        '[AppDataPreloader] Server routing: ${isReachable ? "available" : "unavailable"}',
+      );
+    } catch (e) {
+      _serverRoutingAvailable = false;
+      debugPrint('[AppDataPreloader] Server check failed: $e');
     }
   }
 

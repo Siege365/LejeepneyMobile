@@ -103,3 +103,8 @@ Google Maps billing is not well supported in the Philippines, and free tier limi
 - ✅ Multi-language support (EN/FIL/CEB)
 - ✅ Distance unit conversion (km/miles)
 - ✅ Data pre-loading for fast app startup
+- ✅ Offline-first route caching (SQLite)
+- ✅ Map tile persistent caching (1000 tiles, 30-day expiry)
+- ✅ Connectivity monitoring with offline banner
+- ✅ Password reset with 6-digit email codes
+- ✅ Graceful offline error handling across all screens
