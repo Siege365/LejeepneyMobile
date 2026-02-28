@@ -2,3 +2,5 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: "assets/images/LeJeepneyFinal.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/LeJeepneyFinal.png"
