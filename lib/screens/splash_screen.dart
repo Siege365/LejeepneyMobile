@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../repositories/repositories.dart';
 import '../services/app_data_preloader.dart';
+import '../services/api_service.dart';
 import '../utils/page_transitions.dart';
 import 'auth/login_screen.dart';
 import 'main_navigation.dart';
@@ -25,6 +27,17 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initializeAndNavigate() async {
+    // Check backend health first
+    final apiService = ApiService();
+    final isBackendHealthy = await apiService.checkHealth();
+
+    if (!isBackendHealthy) {
+      debugPrint(
+        '[Splash] Backend health check failed - continuing with offline mode',
+      );
+      // Continue anyway - app will work with cached data
+    }
+
     // Pre-load all data in parallel while splash is showing
     final routeRepo = context.read<RouteRepository>();
     final landmarkRepo = context.read<LandmarkRepository>();

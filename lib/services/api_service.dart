@@ -21,8 +21,11 @@ class ApiService {
   // API version path
   static const String _apiPath = '/api/v1';
 
-  // ngrok URL (when using ngrok for physical device testing)
-  // SECURITY: Uses HTTPS for encrypted connections
+  // Production URL (Render.com deployment)
+  // SECURITY: HTTPS encrypted connection
+  static const String _productionUrl = 'https://lejeepney.onrender.com/api/v1';
+
+  // ngrok URL (for local development/testing only)
   // Get this from running: ngrok http 8000
   static const String _ngrokUrl =
       'https://heterochromous-lilli-luetically.ngrok-free.dev/api/v1';
@@ -37,10 +40,18 @@ class ApiService {
   static const String _baseUrlDevice =
       'http://$_localIp:$_port$_apiPath'; // Physical device (local network)
 
+  // Toggle between production and development
+  static const bool _useProduction = true;
+
   static String get baseUrl {
+    // PRODUCTION MODE - Uses Render.com deployed backend
+    if (_useProduction) {
+      return _productionUrl;
+    }
+
+    // DEVELOPMENT MODE - Uses local/ngrok backend
     if (kIsWeb) {
-      // SECURITY: Use HTTPS in production
-      return kDebugMode ? _baseUrlWeb : 'https://localhost:$_port$_apiPath';
+      return kDebugMode ? _baseUrlWeb : _productionUrl;
     }
     if (Platform.isAndroid) {
       // For physical device with firewall issues, use ngrok (already HTTPS):
@@ -49,7 +60,7 @@ class ApiService {
       // For local network (no firewall):
       // return _baseUrlDevice; // Use _baseUrlEmulator for Android Emulator
     }
-    return kDebugMode ? _baseUrlWeb : 'https://localhost:$_port$_apiPath';
+    return kDebugMode ? _baseUrlWeb : _productionUrl;
   }
 
   // Singleton pattern
@@ -75,6 +86,38 @@ class ApiService {
       headers.addAll(additional);
     }
     return headers;
+  }
+
+  // ========== HEALTH CHECK API ==========
+
+  /// Check backend server health
+  /// Returns true if server is responding, false otherwise
+  /// Uses /api/ping endpoint (no authentication required)
+  Future<bool> checkHealth() async {
+    try {
+      // Extract base domain from baseUrl (remove /api/v1 suffix)
+      final healthUrl = baseUrl.replaceAll('/api/v1', '/api/ping');
+
+      debugPrint('[ApiService] Health check: $healthUrl');
+
+      final response = await _client
+          .get(Uri.parse(healthUrl), headers: _getHeaders())
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final status = data['status'];
+        final service = data['service'];
+        debugPrint('[ApiService] Health check OK: $status - $service');
+        return status == 'ok';
+      }
+
+      debugPrint('[ApiService] Health check failed: ${response.statusCode}');
+      return false;
+    } catch (e) {
+      debugPrint('[ApiService] Health check error: $e');
+      return false;
+    }
   }
 
   // ========== LANDMARKS API ==========
