@@ -636,6 +636,15 @@ class AuthService {
 
     // Also clear rate limit state on logout
     await _clearRateLimitState();
+
+    // Reset tutorial state so next user sees tutorials fresh
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('has_seen_tutorial');
+    // Reset all per-screen tutorial keys
+    final keys = prefs.getKeys().where((k) => k.startsWith('tutorial_seen_'));
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
   }
 
   Future<bool> isLoggedIn() async {

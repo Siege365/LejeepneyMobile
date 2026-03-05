@@ -7,6 +7,7 @@ import '../../repositories/auth_repository.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../utils/security_utils.dart';
+import '../../widgets/common/tutorial_overlay.dart';
 import '../main_navigation.dart';
 import 'login_screen.dart';
 
@@ -52,6 +53,8 @@ class _SignInScreenState extends State<SignInScreen> {
 
       if (mounted) {
         if (result.isSuccess) {
+          // Reset tutorial for new account so they see onboarding
+          await TutorialOverlay.reset();
           // Success - navigate to home
           Navigator.pushReplacement(
             context,

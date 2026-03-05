@@ -50,6 +50,7 @@ dependencies:
   flutter_svg: ^2.2.3
   flutter_cache_manager: ^3.3.1
   flutter_launcher_icons: ^0.14.4
+  cached_network_image: ^3.4.1
 
 dev_dependencies:
   flutter_test:

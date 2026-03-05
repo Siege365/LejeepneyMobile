@@ -41,7 +41,7 @@ class ApiService {
       'http://$_localIp:$_port$_apiPath'; // Physical device (local network)
 
   // Toggle between production and development
-  static const bool _useProduction = true;
+  static const bool _useProduction = false;
 
   static String get baseUrl {
     // PRODUCTION MODE - Uses Render.com deployed backend
@@ -55,10 +55,10 @@ class ApiService {
     }
     if (Platform.isAndroid) {
       // For physical device with firewall issues, use ngrok (already HTTPS):
-      return _ngrokUrl;
+      // return _ngrokUrl;
 
       // For local network (no firewall):
-      // return _baseUrlDevice; // Use _baseUrlEmulator for Android Emulator
+      return _baseUrlDevice; // Use _baseUrlEmulator for Android Emulator
     }
     return kDebugMode ? _baseUrlWeb : _productionUrl;
   }

@@ -25,6 +25,8 @@ import '../../models/jeepney_route.dart';
 import '../../utils/transit_routing/transit_routing.dart';
 import '../../utils/resilient_tile_provider.dart';
 import '../../services/walking_route_service.dart';
+import '../../services/feature_tutorial_service.dart';
+import '../../widgets/common/screen_tutorial_overlay.dart';
 
 class SearchScreen extends StatefulWidget {
   final int? autoSelectRouteId;
@@ -91,6 +93,9 @@ class _SearchScreenState extends State<SearchScreen> {
   LatLng? _pointA; // Origin point
   LatLng? _pointB; // Destination point
 
+  // Screen tutorial state
+  bool _showScreenTutorial = false;
+
   @override
   void initState() {
     super.initState();
@@ -98,6 +103,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
     // Use pre-loaded transit router from preloader
     _hybridRouter = AppDataPreloader.instance.hybridRouter;
+
+    // Check if screen-level tutorial should show
+    _checkScreenTutorial();
 
     // Start initialization immediately without blocking
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -112,6 +120,15 @@ class _SearchScreenState extends State<SearchScreen> {
     await Future.wait([_getCurrentLocation(), _fetchRoutes()]);
     _handleAutoSelection();
     _handleLandmarkNavigation();
+  }
+
+  Future<void> _checkScreenTutorial() async {
+    final seen = await FeatureTutorialService.instance.hasSeenTutorial(
+      FeatureTutorialService.searchScreen,
+    );
+    if (!seen && mounted) {
+      setState(() => _showScreenTutorial = true);
+    }
   }
 
   // ========== LOCATION METHODS ==========
@@ -467,6 +484,49 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  /// Fit map viewport to the user's actual journey — from current location
+  /// through boarding/transfer/drop-off points to destination.
+  /// Unlike _fitMapToRoutes (which uses entire route paths), this only
+  /// includes the relevant segment start/end points so the user can see
+  /// where to board, transfer, and drop off at a comfortable zoom level.
+  void _fitMapToJourney(SuggestedRoute suggestedRoute) {
+    final journeyPoints = <LatLng>[];
+
+    // Include user's current location as the journey origin
+    if (_currentLocation != null) {
+      journeyPoints.add(_currentLocation!);
+    }
+
+    // Include searched destination
+    if (_searchedLocation != null) {
+      journeyPoints.add(_searchedLocation!);
+    }
+
+    // Include all boarding, transfer, and drop-off points from each segment
+    for (final segment in suggestedRoute.segments) {
+      journeyPoints.add(segment.startPoint);
+      journeyPoints.add(segment.endPoint);
+
+      // Include walking path points if available (these are short paths)
+      if (segment.walkingPath != null) {
+        journeyPoints.addAll(segment.walkingPath!);
+      }
+    }
+
+    // Include boarding/drop-off points from the suggested route
+    final boarding = suggestedRoute.originBoardingPoint;
+    if (boarding != null) journeyPoints.add(boarding);
+    final dropOff = suggestedRoute.destinationDropOff;
+    if (dropOff != null) journeyPoints.add(dropOff);
+
+    if (journeyPoints.isEmpty) return;
+
+    final bounds = _calculateBounds(journeyPoints);
+    _mapController.fitCamera(
+      CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(80.0)),
+    );
+  }
+
   LatLngBounds _calculateBounds(List<LatLng> points) {
     double minLat = points.first.latitude;
     double maxLat = points.first.latitude;
@@ -748,7 +808,7 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     if (_visibleRouteIds.isNotEmpty) {
-      _fitMapToRoutes(jeepneyRoutes);
+      _fitMapToJourney(route);
     }
 
     // Fetch walking paths for the new route
@@ -842,10 +902,56 @@ class _SearchScreenState extends State<SearchScreen> {
       body: Stack(
         children: [
           _buildMap(),
+          // Dismiss overlay — tapping the map area closes the routes panel
+          if (_showRoutesList)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => setState(() => _showRoutesList = false),
+                behavior: HitTestBehavior.opaque,
+                child: Container(color: Colors.black.withValues(alpha: 0.15)),
+              ),
+            ),
           _buildSearchOverlay(),
           if (_searchedLocation != null) _buildDirectionsButton(),
           if (_currentLocation != null) _buildRecenterButton(),
+          _buildHelpButton(),
           _buildRoutesToggle(),
+          // Per-screen tutorial overlay
+          if (_showScreenTutorial)
+            ScreenTutorialOverlay(
+              screenKey: FeatureTutorialService.searchScreen,
+              steps: const [
+                TutorialStep(
+                  icon: Icons.search,
+                  title: 'Search Places',
+                  description:
+                      'Type a destination in the search bar to find places on the map. Tap a result to set your destination.',
+                  color: AppColors.darkBlue,
+                ),
+                TutorialStep(
+                  icon: Icons.route,
+                  title: 'List of Routes',
+                  description:
+                      'Tap the "List of Routes" button at the bottom to see all jeepney routes. Toggle routes on/off to show them on the map.',
+                  color: Color(0xFF4CAF50),
+                ),
+                TutorialStep(
+                  icon: Icons.directions,
+                  title: 'Get Directions',
+                  description:
+                      'After selecting a destination, tap the Directions button to find the best jeepney route from your location. View step-by-step transfer points.',
+                  color: Color(0xFFE67E22),
+                ),
+                TutorialStep(
+                  icon: Icons.my_location,
+                  title: 'Recenter Map',
+                  description:
+                      'Lost on the map? Tap the location button on the right to snap back to your current position.',
+                  color: AppColors.teal,
+                ),
+              ],
+              onComplete: () => setState(() => _showScreenTutorial = false),
+            ),
         ],
       ),
     );
@@ -1228,6 +1334,19 @@ class _SearchScreenState extends State<SearchScreen> {
         onPressed: _recenterToUserLocation,
         backgroundColor: AppColors.white,
         child: const Icon(Icons.my_location, color: Colors.blue),
+      ),
+    );
+  }
+
+  Widget _buildHelpButton() {
+    return Positioned(
+      top: 110,
+      right: 16,
+      child: FloatingActionButton(
+        onPressed: () => setState(() => _showScreenTutorial = true),
+        backgroundColor: AppColors.white,
+        mini: true,
+        child: const Icon(Icons.help_outline, color: AppColors.darkBlue),
       ),
     );
   }

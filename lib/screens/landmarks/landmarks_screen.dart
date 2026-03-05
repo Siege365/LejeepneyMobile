@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,8 @@ import '../../constants/app_colors.dart';
 import '../../models/landmark.dart';
 import '../../repositories/landmark_repository.dart';
 import '../../services/settings_service.dart';
+import '../../services/feature_tutorial_service.dart';
+import '../../widgets/common/screen_tutorial_overlay.dart';
 import '../main_navigation.dart';
 
 class LandmarksScreen extends StatefulWidget {
@@ -28,6 +31,9 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
   String? _errorMessage;
   Position? _userPosition;
 
+  // Screen tutorial state
+  bool _showScreenTutorial = false;
+
   final List<String> _categories = [
     'All',
     'Downtown',
@@ -42,6 +48,16 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
   void initState() {
     super.initState();
     _initializeData();
+    _checkScreenTutorial();
+  }
+
+  Future<void> _checkScreenTutorial() async {
+    final seen = await FeatureTutorialService.instance.hasSeenTutorial(
+      FeatureTutorialService.landmarks,
+    );
+    if (!seen && mounted) {
+      setState(() => _showScreenTutorial = true);
+    }
   }
 
   Future<void> _initializeData() async {
@@ -239,268 +255,330 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.primary,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 16),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 16),
 
-            // Title
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Center(
-                child: Text(
-                  'Landmarks',
-                  style: GoogleFonts.slackey(
-                    fontSize: 28,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Search Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.search, color: AppColors.gray, size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        cursorColor: AppColors.darkBlue,
-                        onChanged: (value) {
-                          setState(() {
-                            _searchQuery = value;
-                          });
-                        },
-                        decoration: InputDecoration(
-                          hintText: 'Search landmarks nearby',
-                          hintStyle: TextStyle(
-                            color: AppColors.gray,
-                            fontSize: 14,
-                          ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (_searchQuery.isNotEmpty)
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _searchController.clear();
-                            _searchQuery = '';
-                          });
-                        },
-                        child: Icon(
-                          Icons.close,
-                          color: AppColors.gray,
-                          size: 20,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Results text
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                _searchQuery.isEmpty
-                    ? 'Popular destinations in Davao'
-                    : 'Results for "$_searchQuery"',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textPrimary.withValues(alpha: 0.8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Category Pills
-            SizedBox(
-              height: 45,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _categories.length,
-                itemBuilder: (context, index) {
-                  final category = _categories[index];
-                  final isSelected = _selectedCategory == category;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedCategory = category;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.darkBlue
-                              : AppColors.white,
-                          borderRadius: BorderRadius.circular(25),
-                          border: Border.all(
-                            color: isSelected
-                                ? AppColors.darkBlue
-                                : AppColors.gray.withValues(alpha: 0.3),
-                            width: 1.5,
-                          ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: AppColors.darkBlue.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Text(
-                          category,
-                          style: GoogleFonts.slackey(
-                            fontSize: 12,
-                            color: isSelected
-                                ? AppColors.white
-                                : AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // API Status indicator
-            if (_errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                // Title with Help Icon
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Icon(Icons.wifi_off, size: 14, color: AppColors.warning),
-                      const SizedBox(width: 6),
-                      Text(
-                        _errorMessage!,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.warning,
+                      Center(
+                        child: Text(
+                          'Landmarks',
+                          style: GoogleFonts.slackey(
+                            fontSize: 28,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.help_outline,
+                            color: AppColors.darkBlue,
+                          ),
+                          onPressed: () =>
+                              setState(() => _showScreenTutorial = true),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            if (_errorMessage != null) const SizedBox(height: 8),
+                const SizedBox(height: 16),
 
-            // Landmarks List
-            Expanded(
-              child: _isLoading
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(color: AppColors.darkBlue),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Loading landmarks...',
+                // Search Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.search, color: AppColors.gray, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
                             style: TextStyle(
+                              color: AppColors.textPrimary,
                               fontSize: 14,
-                              color: AppColors.gray,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            cursorColor: AppColors.darkBlue,
+                            onChanged: (value) {
+                              setState(() {
+                                _searchQuery = value;
+                              });
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Search landmarks nearby',
+                              hintStyle: TextStyle(
+                                color: AppColors.gray,
+                                fontSize: 14,
+                              ),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                              ),
                             ),
                           ),
-                        ],
+                        ),
+                        if (_searchQuery.isNotEmpty)
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _searchController.clear();
+                                _searchQuery = '';
+                              });
+                            },
+                            child: Icon(
+                              Icons.close,
+                              color: AppColors.gray,
+                              size: 20,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Results text
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    _searchQuery.isEmpty
+                        ? 'Popular destinations in Davao'
+                        : 'Results for "$_searchQuery"',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textPrimary.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Category Pills
+                SizedBox(
+                  height: 45,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _categories.length,
+                    itemBuilder: (context, index) {
+                      final category = _categories[index];
+                      final isSelected = _selectedCategory == category;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedCategory = category;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.darkBlue
+                                  : AppColors.white,
+                              borderRadius: BorderRadius.circular(25),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.darkBlue
+                                    : AppColors.gray.withValues(alpha: 0.3),
+                                width: 1.5,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: AppColors.darkBlue.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Text(
+                              category,
+                              style: GoogleFonts.slackey(
+                                fontSize: 12,
+                                color: isSelected
+                                    ? AppColors.white
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // API Status indicator
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
                       ),
-                    )
-                  : _filteredData.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            // Show wifi icon if error exists (network issue)
-                            _errorMessage != null
-                                ? Icons.wifi_off
-                                : Icons.search_off,
-                            size: 60,
-                            color: AppColors.gray.withValues(alpha: 0.5),
+                            Icons.wifi_off,
+                            size: 14,
+                            color: AppColors.warning,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(width: 6),
                           Text(
-                            // Show error message if exists, otherwise "No landmarks found"
-                            _errorMessage ?? 'No landmarks found',
+                            _errorMessage!,
                             style: TextStyle(
-                              fontSize: 16,
-                              color: AppColors.gray,
+                              fontSize: 11,
+                              color: AppColors.warning,
                             ),
                           ),
                         ],
                       ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _fetchLandmarks,
-                      color: AppColors.darkBlue,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _filteredData.length,
-                        itemBuilder: (context, index) {
-                          final landmark = _filteredData[index];
-                          return _buildApiLandmarkCard(landmark);
-                        },
-                      ),
                     ),
+                  ),
+                if (_errorMessage != null) const SizedBox(height: 8),
+
+                // Landmarks List
+                Expanded(
+                  child: _isLoading
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(
+                                color: AppColors.darkBlue,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Loading landmarks...',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.gray,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : _filteredData.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                // Show wifi icon if error exists (network issue)
+                                _errorMessage != null
+                                    ? Icons.wifi_off
+                                    : Icons.search_off,
+                                size: 60,
+                                color: AppColors.gray.withValues(alpha: 0.5),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                // Show error message if exists, otherwise "No landmarks found"
+                                _errorMessage ?? 'No landmarks found',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: AppColors.gray,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _fetchLandmarks,
+                          color: AppColors.darkBlue,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _filteredData.length,
+                            itemBuilder: (context, index) {
+                              final landmark = _filteredData[index];
+                              return _buildApiLandmarkCard(landmark);
+                            },
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 20), // Space for bottom nav
+              ],
             ),
-            const SizedBox(height: 20), // Space for bottom nav
-          ],
-        ),
+          ),
+          // Per-screen tutorial overlay
+          if (_showScreenTutorial)
+            ScreenTutorialOverlay(
+              screenKey: FeatureTutorialService.landmarks,
+              steps: const [
+                TutorialStep(
+                  icon: Icons.category_outlined,
+                  title: 'Browse Categories',
+                  description:
+                      'Use the category chips to filter landmarks by type — Downtown, Malls, Schools, Hospitals, or Transport hubs.',
+                  color: Color(0xFFE67E22),
+                ),
+                TutorialStep(
+                  icon: Icons.search,
+                  title: 'Search Landmarks',
+                  description:
+                      'Type in the search bar to find any landmark by name. Results update as you type.',
+                  color: AppColors.darkBlue,
+                ),
+                TutorialStep(
+                  icon: Icons.photo_library_outlined,
+                  title: 'View Gallery',
+                  description:
+                      'Tap a landmark card to see its photo gallery, details, and location on the map. Swipe through images in the carousel.',
+                  color: Color(0xFF9C27B0),
+                ),
+                TutorialStep(
+                  icon: Icons.directions,
+                  title: 'Get Directions',
+                  description:
+                      'From a landmark\'s detail view, tap "Get Directions" to see jeepney routes that pass nearby. Navigate with ease!',
+                  color: Color(0xFF4CAF50),
+                ),
+              ],
+              onComplete: () => setState(() => _showScreenTutorial = false),
+            ),
+        ],
       ),
     );
   }
@@ -541,31 +619,48 @@ class _LandmarksScreenState extends State<LandmarksScreen> {
                     topRight: Radius.circular(16),
                   ),
                   child: landmark.iconUrl != null
-                      ? Image.network(
-                          landmark.iconUrl!,
+                      ? CachedNetworkImage(
+                          imageUrl: landmark.iconUrl!,
                           width: double.infinity,
                           height: 180,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                                width: double.infinity,
-                                height: 180,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      AppColors.primary.withValues(alpha: 0.6),
-                                      AppColors.darkBlue.withValues(alpha: 0.4),
-                                    ],
-                                  ),
-                                ),
-                                child: Icon(
-                                  _getCategoryIcon(landmark.category),
-                                  color: AppColors.white,
-                                  size: 60,
+                          memCacheWidth: 400,
+                          memCacheHeight: 360,
+                          fadeInDuration: const Duration(milliseconds: 200),
+                          placeholder: (context, url) => Container(
+                            width: double.infinity,
+                            height: 180,
+                            color: AppColors.lightGray.withValues(alpha: 0.3),
+                            child: const Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.darkBlue,
                                 ),
                               ),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            width: double.infinity,
+                            height: 180,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  AppColors.primary.withValues(alpha: 0.6),
+                                  AppColors.darkBlue.withValues(alpha: 0.4),
+                                ],
+                              ),
+                            ),
+                            child: Icon(
+                              _getCategoryIcon(landmark.category),
+                              color: AppColors.white,
+                              size: 60,
+                            ),
+                          ),
                         )
                       : Container(
                           width: double.infinity,
@@ -899,28 +994,24 @@ class _LandmarkPreviewModalState extends State<_LandmarkPreviewModal> {
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: Image.network(
-                                imageUrl,
+                              child: CachedNetworkImage(
+                                imageUrl: imageUrl,
                                 fit: BoxFit.cover,
-                                loadingBuilder: (context, child, progress) {
-                                  if (progress == null) return child;
-                                  return Container(
-                                    color: AppColors.lightGray.withValues(
-                                      alpha: 0.3,
+                                memCacheWidth: 800,
+                                fadeInDuration: const Duration(
+                                  milliseconds: 200,
+                                ),
+                                placeholder: (context, url) => Container(
+                                  color: AppColors.lightGray.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      color: AppColors.darkBlue,
                                     ),
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        color: AppColors.darkBlue,
-                                        value:
-                                            progress.expectedTotalBytes != null
-                                            ? progress.cumulativeBytesLoaded /
-                                                  progress.expectedTotalBytes!
-                                            : null,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                errorBuilder: (context, error, stackTrace) {
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) {
                                   return Container(
                                     color: AppColors.primary.withValues(
                                       alpha: 0.3,

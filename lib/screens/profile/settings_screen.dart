@@ -5,6 +5,7 @@ import '../../constants/app_colors.dart';
 import '../../services/settings_service.dart';
 import '../../services/localization_service.dart';
 import '../../widgets/common/tutorial_overlay.dart';
+import '../../services/feature_tutorial_service.dart';
 
 /// Settings screen — reads/writes via [SettingsService] provider.
 /// No local state duplication; every toggle directly updates the service.
@@ -181,6 +182,13 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Replay Tutorial',
                 subtitle: 'Watch the app introduction again',
                 onTap: () => _replayTutorial(context),
+              ),
+              const Divider(height: 1),
+              _buildActionTile(
+                icon: Icons.restart_alt,
+                title: 'Reset All Tutorials',
+                subtitle: 'Show screen tutorials again on next visit',
+                onTap: () => _resetAllTutorials(context),
               ),
             ]),
             const SizedBox(height: 32),
@@ -463,5 +471,24 @@ class SettingsScreen extends StatelessWidget {
             TutorialOverlay(onComplete: () => Navigator.of(context).pop()),
       ),
     );
+  }
+
+  void _resetAllTutorials(BuildContext context) async {
+    await FeatureTutorialService.instance.resetAll();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 8),
+              Text('All tutorials will show again'),
+            ],
+          ),
+          backgroundColor: AppColors.success,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 }

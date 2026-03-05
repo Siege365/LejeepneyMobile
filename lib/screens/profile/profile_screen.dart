@@ -327,8 +327,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           _buildDivider(),
                           _buildSettingItem(
-                            icon: Icons.feedback_outlined,
-                            title: 'Report & Feedback',
+                            icon: Icons.support_agent,
+                            title: 'Customer Service',
                             onTap: () {
                               Navigator.push(
                                 context,

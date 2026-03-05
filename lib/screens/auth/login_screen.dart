@@ -7,6 +7,7 @@ import '../../repositories/auth_repository.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../utils/security_utils.dart';
+import '../../widgets/common/tutorial_overlay.dart';
 import '../main_navigation.dart';
 import 'sign_in_screen.dart';
 import 'forgot_password_screen.dart';
@@ -46,6 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (mounted) {
         if (result.isSuccess) {
+          // Reset tutorial state for this login session
+          await TutorialOverlay.reset();
           // Success - navigate to home
           Navigator.pushReplacement(
             context,

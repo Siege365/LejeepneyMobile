@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_colors.dart';
+import '../../services/feature_tutorial_service.dart';
 
 /// Full-screen tutorial overlay that introduces app features.
 /// Auto-plays on first launch; can be replayed from the help button.
@@ -39,6 +40,13 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    // Block tab switching while tutorial is active
+    FeatureTutorialService.instance.setTutorialActive(true);
+  }
+
   static const List<_TutorialStep> _steps = [
     _TutorialStep(
       icon: Icons.map_outlined,
@@ -72,7 +80,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
       icon: Icons.person_outline,
       title: 'Your Profile',
       description:
-          'Manage your account settings, view recent activity, and customise notifications from your profile.',
+          'Manage your account settings, view recent activity, call customer support, and customise notifications from your profile.',
       color: Color(0xFF9C27B0),
     ),
   ];
@@ -95,6 +103,8 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
   }
 
   void _finish() async {
+    // Re-enable tab switching
+    FeatureTutorialService.instance.setTutorialActive(false);
     await TutorialOverlay.markAsSeen();
     widget.onComplete();
   }

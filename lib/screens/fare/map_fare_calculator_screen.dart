@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +16,8 @@ import '../../services/settings_service.dart';
 import '../../utils/multi_transfer_matcher.dart';
 import '../../utils/transit_routing/transit_routing.dart';
 import '../../utils/resilient_tile_provider.dart';
+import '../../services/feature_tutorial_service.dart';
+import '../../widgets/common/screen_tutorial_overlay.dart';
 
 class MapFareCalculatorScreen extends StatefulWidget {
   final LatLng? initialPointA;
@@ -63,14 +66,29 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
   List<SuggestedRoute> _suggestedRoutes = []; // New: hybrid routing results
   HybridRoutingResult? _hybridResult; // New: full hybrid result
 
+  // POI Search state
+  final TextEditingController _searchControllerA = TextEditingController();
+  final TextEditingController _searchControllerB = TextEditingController();
+  final FocusNode _focusNodeA = FocusNode();
+  final FocusNode _focusNodeB = FocusNode();
+  List<PlaceSearchResult> _searchResults = [];
+  bool _isSearchingPOI = false;
+  bool _showSearchResults = false;
+  bool _searchingForPointA = true; // which point the search is for
+  Timer? _searchDebounce;
+
   final LocationService _locationService = LocationService();
   final RouteCalculationService _routeCalculationService =
       RouteCalculationService();
+
+  // Screen tutorial state
+  bool _showScreenTutorial = false;
 
   @override
   void initState() {
     super.initState();
     _initLocationService();
+    _checkScreenTutorial();
 
     // Check if we should swap points
     if (widget.swapPoints &&
@@ -113,6 +131,25 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
           _mapController.move(_pointA!, MapConstants.defaultZoom);
         }
       });
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchControllerA.dispose();
+    _searchControllerB.dispose();
+    _focusNodeA.dispose();
+    _focusNodeB.dispose();
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkScreenTutorial() async {
+    final seen = await FeatureTutorialService.instance.hasSeenTutorial(
+      FeatureTutorialService.fareCalculator,
+    );
+    if (!seen && mounted) {
+      setState(() => _showScreenTutorial = true);
     }
   }
 
@@ -185,6 +222,12 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
             color: AppColors.textPrimary,
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline, color: AppColors.textPrimary),
+            onPressed: () => setState(() => _showScreenTutorial = true),
+          ),
+        ],
       ),
       backgroundColor: AppColors.primary,
       body: Stack(
@@ -421,6 +464,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
                     areaName: _areaA,
                     placeholder: 'Tap map to set starting point',
                     isLoading: _isLoadingArea && _isSelectingPointA,
+                    isPointA: true,
                   ),
                   // Use My Location button
                   if (_isSelectingPointA && _pointA == null)
@@ -470,6 +514,7 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
                     areaName: _areaB,
                     placeholder: 'Tap map to set destination',
                     isLoading: _isLoadingArea && !_isSelectingPointA,
+                    isPointA: false,
                   ),
                   if (_distance != null) ...[
                     const Divider(height: 24),
@@ -501,84 +546,120 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
             ),
           ),
 
+          // POI Search Results Overlay
+          _buildSearchResultsOverlay(),
+
           // Reset & Calculate Buttons
-          Positioned(
-            bottom: 16,
-            left: 16,
-            right: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    // Reset Button
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _resetPoints,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.gray,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
+          if (!_showSearchResults)
+            Positioned(
+              bottom: 16,
+              left: 16,
+              right: 16,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      // Reset Button
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _resetPoints,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.gray,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(25),
+                            ),
                           ),
-                        ),
-                        icon: const Icon(Icons.refresh, color: AppColors.white),
-                        label: Text(
-                          'Reset',
-                          style: GoogleFonts.slackey(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                          icon: const Icon(
+                            Icons.refresh,
                             color: AppColors.white,
+                          ),
+                          label: Text(
+                            'Reset',
+                            style: GoogleFonts.slackey(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.white,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Action Button — changes based on state
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton.icon(
-                        onPressed:
-                            _pointA != null &&
-                                _pointB != null &&
-                                _distance != null &&
-                                !_isMatchingRoutes
-                            ? _confirmAndReturn
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.darkBlue,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
+                      const SizedBox(width: 12),
+                      // Action Button — changes based on state
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton.icon(
+                          onPressed:
+                              _pointA != null &&
+                                  _pointB != null &&
+                                  _distance != null &&
+                                  !_isMatchingRoutes
+                              ? _confirmAndReturn
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.darkBlue,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(25),
+                            ),
                           ),
-                        ),
-                        icon: _isMatchingRoutes
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.white,
-                                ),
-                              )
-                            : const Icon(Icons.check, color: AppColors.white),
-                        label: Text(
-                          _isMatchingRoutes
-                              ? 'Finding Routes...'
-                              : 'Confirm Route',
-                          style: GoogleFonts.slackey(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.white,
+                          icon: _isMatchingRoutes
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.check, color: AppColors.white),
+                          label: Text(
+                            _isMatchingRoutes
+                                ? 'Finding Routes...'
+                                : 'Confirm Route',
+                            style: GoogleFonts.slackey(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.white,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          // Per-screen tutorial overlay
+          if (_showScreenTutorial)
+            ScreenTutorialOverlay(
+              screenKey: FeatureTutorialService.fareCalculator,
+              steps: const [
+                TutorialStep(
+                  icon: Icons.touch_app,
+                  title: 'Select Points',
+                  description:
+                      'Tap on the map to set Point A (origin) and Point B (destination). You can also use the location button to set your current position as Point A.',
+                  color: AppColors.darkBlue,
+                ),
+                TutorialStep(
+                  icon: Icons.search,
+                  title: 'Search Places',
+                  description:
+                      'Use the search fields to find specific places or landmarks. Type a name and select from the results to set your points precisely.',
+                  color: Color(0xFF4CAF50),
+                ),
+                TutorialStep(
+                  icon: Icons.payments_outlined,
+                  title: 'View Fare & Route',
+                  description:
+                      'Once both points are set, the app calculates the driving distance and estimated fare. Tap "Confirm Route" to find matching jeepney routes.',
+                  color: Color(0xFFE67E22),
                 ),
               ],
+              onComplete: () => setState(() => _showScreenTutorial = false),
             ),
-          ),
         ],
       ),
     );
@@ -591,7 +672,13 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
     required String? areaName,
     required String placeholder,
     required bool isLoading,
+    required bool isPointA,
   }) {
+    final controller = isPointA ? _searchControllerA : _searchControllerB;
+    final focusNode = isPointA ? _focusNodeA : _focusNodeB;
+    final isCurrentlySearching =
+        _showSearchResults && _searchingForPointA == isPointA;
+
     return Row(
       children: [
         Container(
@@ -613,18 +700,50 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            areaName ?? placeholder,
-            style: TextStyle(
-              color: areaName != null ? AppColors.textPrimary : AppColors.gray,
-              fontWeight: areaName != null
-                  ? FontWeight.w600
-                  : FontWeight.normal,
-              fontSize: 13,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: areaName != null && !isCurrentlySearching
+              ? GestureDetector(
+                  onTap: () => _startSearchForPoint(isPointA),
+                  child: Text(
+                    areaName,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )
+              : TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Search a place or tap the map',
+                    hintStyle: TextStyle(color: AppColors.gray, fontSize: 13),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                    border: InputBorder.none,
+                    suffixIcon: controller.text.isNotEmpty
+                        ? GestureDetector(
+                            onTap: () {
+                              controller.clear();
+                              setState(() {
+                                _searchResults = [];
+                                _showSearchResults = false;
+                              });
+                            },
+                            child: const Icon(Icons.clear, size: 18),
+                          )
+                        : const Icon(
+                            Icons.search,
+                            size: 18,
+                            color: AppColors.gray,
+                          ),
+                  ),
+                  onChanged: (query) => _onPOISearchChanged(query, isPointA),
+                  onTap: () => _startSearchForPoint(isPointA),
+                ),
         ),
         if (isLoading)
           const SizedBox(
@@ -632,13 +751,192 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
             height: 18,
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
-        if (areaName != null && !isLoading)
+        if (areaName != null && !isLoading && !isCurrentlySearching)
           Icon(Icons.check_circle, color: color, size: 20),
       ],
     );
   }
 
+  // ========== POI SEARCH METHODS ==========
+
+  void _startSearchForPoint(bool isPointA) {
+    final controller = isPointA ? _searchControllerA : _searchControllerB;
+    controller.clear();
+    setState(() {
+      _searchingForPointA = isPointA;
+      _showSearchResults = true;
+      _searchResults = [];
+    });
+    final focusNode = isPointA ? _focusNodeA : _focusNodeB;
+    focusNode.requestFocus();
+  }
+
+  void _onPOISearchChanged(String query, bool isPointA) {
+    _searchDebounce?.cancel();
+    setState(() => _searchingForPointA = isPointA);
+
+    if (query.trim().length < 2) {
+      setState(() {
+        _searchResults = [];
+        _isSearchingPOI = false;
+      });
+      return;
+    }
+
+    setState(() => _isSearchingPOI = true);
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+      _searchPOI(query.trim(), isPointA);
+    });
+  }
+
+  Future<void> _searchPOI(String query, bool isPointA) async {
+    try {
+      final results = await _locationService.searchPlaces(
+        query,
+        nearLocation: _userLocation,
+        limit: 5,
+      );
+      if (!mounted) return;
+      setState(() {
+        _searchResults = results;
+        _isSearchingPOI = false;
+        _showSearchResults = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSearchingPOI = false);
+    }
+  }
+
+  void _selectSearchResult(PlaceSearchResult place, bool isPointA) async {
+    // Dismiss keyboard and clear search
+    FocusScope.of(context).unfocus();
+    final controller = isPointA ? _searchControllerA : _searchControllerB;
+    controller.clear();
+    setState(() {
+      _showSearchResults = false;
+      _searchResults = [];
+    });
+
+    // Set the point coordinates and move map
+    final point = place.latLng;
+    _mapController.move(point, 16.0);
+
+    if (isPointA) {
+      setState(() {
+        _pointA = point;
+        _areaA = place.name;
+        _distance = null;
+        _routePath = [];
+        _isSelectingPointA = false;
+      });
+    } else {
+      setState(() {
+        _pointB = point;
+        _areaB = place.name;
+        _distance = null;
+        _routePath = [];
+      });
+    }
+
+    // Auto-calculate route when both points are set
+    if (_pointA != null && _pointB != null) {
+      await _getRoute();
+    }
+  }
+
+  Widget _buildSearchResultsOverlay() {
+    if (!_showSearchResults) return const SizedBox.shrink();
+
+    return Positioned(
+      top: _isSelectingPointA ? 110 : 160,
+      left: 16,
+      right: 16,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          constraints: const BoxConstraints(maxHeight: 250),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: _isSearchingPOI
+              ? const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              : _searchResults.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Type to search for a place',
+                    style: TextStyle(color: AppColors.gray, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              : ListView.separated(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  itemCount: _searchResults.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final place = _searchResults[index];
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(
+                        Icons.place,
+                        color: AppColors.darkBlue,
+                        size: 20,
+                      ),
+                      title: Text(
+                        place.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: place.type != null
+                          ? Text(
+                              place.type!,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.gray,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          : null,
+                      onTap: () =>
+                          _selectSearchResult(place, _searchingForPointA),
+                    );
+                  },
+                ),
+        ),
+      ),
+    );
+  }
+
   void _onMapTapped(LatLng point) async {
+    // Dismiss POI search if active
+    if (_showSearchResults) {
+      FocusScope.of(context).unfocus();
+      setState(() {
+        _showSearchResults = false;
+        _searchResults = [];
+        _searchControllerA.clear();
+        _searchControllerB.clear();
+      });
+    }
+
     if (_isSelectingPointA) {
       setState(() {
         _pointA = point;
@@ -1059,6 +1357,9 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
   }
 
   void _resetPoints() {
+    FocusScope.of(context).unfocus();
+    _searchControllerA.clear();
+    _searchControllerB.clear();
     setState(() {
       _pointA = null;
       _pointB = null;
@@ -1071,6 +1372,8 @@ class _MapFareCalculatorScreenState extends State<MapFareCalculatorScreen> {
       _multiTransferRoutes = [];
       _suggestedRoutes = [];
       _hybridResult = null;
+      _showSearchResults = false;
+      _searchResults = [];
     });
     _mapController.move(MapConstants.defaultLocation, MapConstants.defaultZoom);
   }

@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeJeepney System - Interaction Diagrams</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+        header {
+            text-align: center;
+            padding: 40px 20px 20px;
+        }
+        header h1 {
+            font-size: 2.4rem;
+            background: linear-gradient(90deg, #38bdf8, #818cf8, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        header p {
+            color: #94a3b8;
+            font-size: 1.1rem;
+        }
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            padding: 20px;
+            flex-wrap: wrap;
+        }
+        .nav button {
+            padding: 10px 24px;
+            border: 2px solid #334155;
+            background: #1e293b;
+            color: #cbd5e1;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+        .nav button:hover {
+            border-color: #818cf8;
+            color: #fff;
+        }
+        .nav button.active {
+            background: #818cf8;
+            border-color: #818cf8;
+            color: #fff;
+            font-weight: 600;
+        }
+        .diagram-section {
+            max-width: 1200px;
+            margin: 0 auto 40px;
+            padding: 0 20px;
+            display: none;
+        }
+        .diagram-section.visible { display: block; }
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+        }
+        .card h2 {
+            font-size: 1.5rem;
+            color: #a78bfa;
+            margin-bottom: 6px;
+        }
+        .card .subtitle {
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+        }
+        .mermaid {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+        }
+        .key-points {
+            margin-top: 24px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .key-point {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 14px;
+        }
+        .key-point strong { color: #38bdf8; }
+        .key-point p { color: #94a3b8; font-size: 0.85rem; margin-top: 4px; }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .info-card {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .info-card h3 {
+            color: #818cf8;
+            margin-bottom: 12px;
+            font-size: 1.1rem;
+        }
+        .info-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        .info-card li {
+            padding: 4px 0;
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+        .info-card li::before {
+            content: '▸ ';
+            color: #38bdf8;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th {
+            background: #334155;
+            color: #e2e8f0;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+        td {
+            padding: 10px 16px;
+            border-bottom: 1px solid #1e293b;
+            color: #94a3b8;
+            font-size: 0.85rem;
+        }
+        tr:nth-child(even) { background: #0f172a; }
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: #475569;
+            font-size: 0.85rem;
+            border-top: 1px solid #1e293b;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🚐 LeJeepney System Architecture</h1>
+    <p>Davao City Jeepney Navigation System — Admin & User Interaction Diagrams</p>
+</header>
+
+<div class="nav">
+    <button class="active" onclick="showSection('overview')">🏗️ High-Level Overview</button>
+    <button onclick="showSection('detailed')">🔧 Detailed Architecture</button>
+    <button onclick="showSection('sequence')">🔄 Interaction Flows</button>
+    <button onclick="showSection('info')">📋 Tech & Security</button>
+</div>
+
+<!-- DIAGRAM 1 -->
+<div id="overview" class="diagram-section visible">
+    <div class="card">
+        <h2>High-Level System Architecture</h2>
+        <p class="subtitle">How the Admin Panel and Mobile App connect through the shared backend</p>
+        <div class="mermaid">
+flowchart LR
+    subgraph ADMIN["&lt;b&gt;👨‍💼 ADMIN SIDE&lt;/b&gt;&lt;br/&gt;&lt;i&gt;Web Browser&lt;/i&gt;"]
+        A1["&lt;b&gt;Admin Panel&lt;/b&gt;&lt;br/&gt;━━━━━━━━━━━&lt;br/&gt;Routes Management&lt;br/&gt;Landmarks Management&lt;br/&gt;Ticket Management&lt;br/&gt;System Settings&lt;br/&gt;Audit Logs"]
+    end
+    
+    subgraph USER["&lt;b&gt;📱 USER SIDE&lt;/b&gt;&lt;br/&gt;&lt;i&gt;Mobile App - Flutter&lt;/i&gt;"]
+        U1["&lt;b&gt;Mobile Features&lt;/b&gt;&lt;br/&gt;━━━━━━━━━━━&lt;br/&gt;Route Finder&lt;br/&gt;Landmark Explorer&lt;br/&gt;Fare Calculator&lt;br/&gt;Support Tickets&lt;br/&gt;Activity History"]
+    end
+    
+    subgraph BACKEND["&lt;b&gt;🔧 BACKEND LAYER&lt;/b&gt;&lt;br/&gt;&lt;i&gt;Laravel 12 + PHP 8.2&lt;/i&gt;"]
+        B1["&lt;b&gt;Web Routes&lt;/b&gt;&lt;br/&gt;Session Auth"]
+        B2["&lt;b&gt;API Routes&lt;/b&gt;&lt;br/&gt;Sanctum Token"]
+        B3["&lt;b&gt;Shared Controllers&lt;/b&gt;&lt;br/&gt;Business Logic"]
+    end
+    
+    subgraph DATA["&lt;b&gt;💾 DATA LAYER&lt;/b&gt;&lt;br/&gt;&lt;i&gt;MySQL Database&lt;/i&gt;"]
+        D1[("Routes&lt;br/&gt;Landmarks&lt;br/&gt;Tickets&lt;br/&gt;Users&lt;br/&gt;Settings&lt;br/&gt;Audit Logs")]
+    end
+    
+    subgraph EXT["&lt;b&gt;🌐 EXTERNAL SERVICES&lt;/b&gt;"]
+        E1["EmailJS&lt;br/&gt;&lt;small&gt;Email Notifications&lt;/small&gt;"]
+        E2["OpenRouteService&lt;br/&gt;&lt;small&gt;Walking Directions&lt;/small&gt;"]
+        E3["OSRM&lt;br/&gt;&lt;small&gt;Fallback Routes&lt;/small&gt;"]
+    end
+    
+    A1 &lt;--&gt;|"Session&lt;br/&gt;Cookie"| B1
+    U1 &lt;--&gt;|"Bearer&lt;br/&gt;Token"| B2
+    
+    B1 --&gt; B3
+    B2 --&gt; B3
+    B3 &lt;--&gt; D1
+    
+    A1 -..-&gt;|"Send&lt;br/&gt;Email"| E1
+    B2 -..-&gt;|"Walking&lt;br/&gt;Paths"| E2
+    B2 -..-&gt;|"Fallback"| E3
+    
+    style ADMIN fill:#dbeafe,stroke:#1e40af,stroke-width:3px
+    style USER fill:#d1fae5,stroke:#047857,stroke-width:3px
+    style BACKEND fill:#fef3c7,stroke:#d97706,stroke-width:3px
+    style DATA fill:#ede9fe,stroke:#6d28d9,stroke-width:3px
+    style EXT fill:#fecaca,stroke:#b91c1c,stroke-width:3px
+    
+    style A1 fill:#3b82f6,stroke:#1e40af,color:#fff
+    style U1 fill:#10b981,stroke:#047857,color:#fff
+    style B1 fill:#f59e0b,stroke:#d97706,color:#000
+    style B2 fill:#f59e0b,stroke:#d97706,color:#000
+    style B3 fill:#fbbf24,stroke:#d97706,color:#000
+    style D1 fill:#8b5cf6,stroke:#6d28d9,color:#fff
+        </div>
+        <div class="key-points">
+            <div class="key-point">
+                <strong>👨‍💼 Admin Side</strong>
+                <p>Web panel with session-based authentication for managing routes, landmarks, tickets, and settings</p>
+            </div>
+            <div class="key-point">
+                <strong>📱 User Side</strong>
+                <p>Flutter mobile app with Sanctum token auth for route finding, fare calculation, and support</p>
+            </div>
+            <div class="key-point">
+                <strong>🔧 Shared Backend</strong>
+                <p>Single Laravel 12 backend serves both web (admin) and API (mobile) routes</p>
+            </div>
+            <div class="key-point">
+                <strong>💾 Single Database</strong>
+                <p>MySQL database storing all system data — changes by admin are instantly available to users</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DIAGRAM 2 -->
+<div id="detailed" class="diagram-section">
+    <div class="card">
+        <h2>Detailed Component Architecture</h2>
+        <p class="subtitle">All components, endpoints, and database tables</p>
+        <div class="mermaid">
+graph TB
+    subgraph AdminSide["👨‍💼 ADMIN SIDE"]
+        A1[Admin User]
+        A2[Web Browser]
+        A3[Admin Panel&lt;br/&gt;Laravel Blade + Tailwind]
+        
+        A1 --&gt;|Login via Browser| A2
+        A2 --&gt;|Session-based Auth| A3
+        
+        A3 --&gt;|Manage Routes| A4[Route Management]
+        A3 --&gt;|Manage Landmarks| A5[Landmark Management]
+        A3 --&gt;|Handle Tickets| A6[Customer Service]
+        A3 --&gt;|View Logs| A7[Audit Trail]
+        A3 --&gt;|Update Settings| A8[App Settings]
+    end
+    
+    subgraph UserSide["📱 USER SIDE"]
+        U1[Mobile User]
+        U2[Flutter Mobile App&lt;br/&gt;Android/iOS]
+        
+        U1 --&gt;|Uses App| U2
+        
+        U2 --&gt;|Search Routes| U4[Route Finder]
+        U2 --&gt;|Browse Places| U5[Landmark Explorer]
+        U2 --&gt;|Calculate Fare| U6[Fare Calculator]
+        U2 --&gt;|Submit Issue| U7[Support Tickets]
+        U2 --&gt;|View History| U8[Recent Activities]
+    end
+    
+    subgraph BackendSide["🔧 LARAVEL BACKEND"]
+        B1[API Layer&lt;br/&gt;/api/v1/*]
+        B2[Web Layer&lt;br/&gt;/dashboard /routes]
+        B3[Controllers]
+        B4[Eloquent ORM]
+        B5[MySQL Database]
+        
+        B1 --&gt;|Process Requests| B3
+        B2 --&gt;|Process Requests| B3
+        B3 --&gt;|Query Data| B4
+        B4 --&gt;|CRUD Operations| B5
+    end
+    
+    subgraph DBTables["💾 DATABASE TABLES"]
+        D1[(routes)]
+        D2[(landmarks)]
+        D3[(support_tickets)]
+        D4[(ticket_replies)]
+        D5[(ticket_notifications)]
+        D6[(recent_activities)]
+        D7[(app_settings)]
+        D8[(users)]
+        D9[(activity_logs)]
+    end
+    
+    subgraph ExtServices["🌐 EXTERNAL SERVICES"]
+        E1[EmailJS&lt;br/&gt;Client-side Email]
+        E2[OpenRouteService&lt;br/&gt;Walking Routes]
+        E3[OSRM&lt;br/&gt;Fallback Walking Routes]
+    end
+    
+    A4 --&gt;|POST /routes| B2
+    A5 --&gt;|POST /landmarks| B2
+    A6 --&gt;|POST /tickets/reply| B2
+    A7 --&gt;|GET /audit-logs| B2
+    A8 --&gt;|PUT /settings| B2
+    
+    U4 --&gt;|GET /api/v1/routes| B1
+    U5 --&gt;|GET /api/v1/landmarks| B1
+    U6 --&gt;|POST /api/v1/routes/find| B1
+    U7 --&gt;|POST /api/v1/tickets| B1
+    U8 --&gt;|GET /api/v1/activities| B1
+    
+    A6 -..-&gt;|Send Email| E1
+    B1 -..-&gt;|Walking Directions| E2
+    B1 -..-&gt;|Fallback| E3
+    
+    A3 --&gt;|Session Cookie| B2
+    U2 --&gt;|Bearer Token Sanctum| B1
+    
+    B5 -..- D1
+    B5 -..- D2
+    B5 -..- D3
+    B5 -..- D4
+    B5 -..- D5
+    B5 -..- D6
+    B5 -..- D7
+    B5 -..- D8
+    B5 -..- D9
+    
+    style A3 fill:#3b82f6,stroke:#1e40af,color:#fff
+    style U2 fill:#10b981,stroke:#047857,color:#fff
+    style B1 fill:#f59e0b,stroke:#d97706,color:#fff
+    style B2 fill:#f59e0b,stroke:#d97706,color:#fff
+    style B5 fill:#8b5cf6,stroke:#6d28d9,color:#fff
+    style E1 fill:#ef4444,stroke:#b91c1c,color:#fff
+    style E2 fill:#06b6d4,stroke:#0891b2,color:#fff
+    style E3 fill:#06b6d4,stroke:#0891b2,color:#fff
+        </div>
+        <div class="key-points">
+            <div class="key-point">
+                <strong>routes</strong>
+                <p>Jeepney route data with path coordinates</p>
+            </div>
+            <div class="key-point">
+                <strong>landmarks</strong>
+                <p>Points of interest with images & descriptions</p>
+            </div>
+            <div class="key-point">
+                <strong>support_tickets</strong>
+                <p>User-submitted help requests</p>
+            </div>
+            <div class="key-point">
+                <strong>ticket_replies</strong>
+                <p>Admin/user conversation threads</p>
+            </div>
+            <div class="key-point">
+                <strong>ticket_notifications</strong>
+                <p>Real-time notification queue</p>
+            </div>
+            <div class="key-point">
+                <strong>app_settings</strong>
+                <p>System config (fares, etc.)</p>
+            </div>
+            <div class="key-point">
+                <strong>users</strong>
+                <p>Admin and mobile user accounts</p>
+            </div>
+            <div class="key-point">
+                <strong>activity_logs</strong>
+                <p>Admin action audit trail</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DIAGRAM 3 -->
+<div id="sequence" class="diagram-section">
+    <div class="card">
+        <h2>Interaction Sequence Flows</h2>
+        <p class="subtitle">Step-by-step data flow for key use cases</p>
+        <div class="mermaid">
+sequenceDiagram
+    participant Admin as 👨‍💼 Admin Panel
+    participant Backend as 🔧 Laravel Backend
+    participant DB as 💾 Database
+    participant API as 📡 API Layer
+    participant Mobile as 📱 Mobile App
+    participant Email as 📧 EmailJS
+    
+    Note over Admin,Mobile: SCENARIO 1: Admin Creates Route
+    Admin->>Backend: POST /routes (Route data + path coordinates)
+    Backend->>DB: Insert into routes table
+    Backend->>DB: Log activity (activity_logs)
+    Backend-->>Admin: Route created successfully
+    
+    Mobile->>API: GET /api/v1/routes
+    API->>DB: SELECT * FROM routes
+    DB-->>API: Return all routes
+    API-->>Mobile: Routes available immediately
+    
+    Note over Admin,Mobile: SCENARIO 2: User Submits Support Ticket
+    Mobile->>API: POST /api/v1/tickets (Issue description)
+    API->>DB: INSERT into support_tickets (status: pending)
+    API->>DB: CREATE ticket_notification
+    API-->>Mobile: Ticket created (#12345)
+    
+    Admin->>Backend: GET /dashboard
+    Backend->>DB: Get pending tickets count
+    DB-->>Backend: 1 new ticket
+    Backend-->>Admin: Show notification badge
+    
+    Admin->>Backend: View ticket #12345
+    Admin->>Backend: POST /tickets/12345/reply + Send Email
+    Backend->>DB: INSERT ticket_reply (sender: admin)
+    Backend->>DB: CREATE ticket_notification (type: admin_message)
+    Backend->>Email: Send branded email to user
+    Email-->>Mobile: Email notification received
+    Backend-->>Admin: Reply sent
+    
+    Mobile->>API: GET /api/v1/tickets/12345/notifications
+    API->>DB: Get notifications for ticket
+    DB-->>API: New admin reply available
+    API-->>Mobile: Show in-app notification
+    
+    Note over Admin,Mobile: SCENARIO 3: Admin Updates Fare Settings
+    Admin->>Backend: PUT /settings (base_fare: 13.00 to 15.00)
+    Backend->>DB: UPDATE app_settings (key: base_fare)
+    Backend->>DB: Log change in activity_logs
+    Backend-->>Admin: Settings saved
+    
+    Mobile->>API: POST /api/v1/routes/find (origin, destination)
+    API->>DB: GET app_settings (base_fare, fare_per_km)
+    DB-->>API: base_fare = 15.00
+    API->>API: Calculate fare with new rate
+    API-->>Mobile: Route + Fare with new rate
+    
+    Note over Admin,Mobile: SCENARIO 4: Admin Adds Landmark
+    Admin->>Backend: POST /landmarks (Name, coords, images)
+    Backend->>DB: INSERT into landmarks
+    Backend->>DB: Log activity
+    Backend-->>Admin: Landmark published
+    
+    Mobile->>API: GET /api/v1/landmarks
+    API->>DB: SELECT * FROM landmarks
+    DB-->>API: All landmarks including new one
+    API-->>Mobile: Landmark appears in list
+        </div>
+        <div class="key-points">
+            <div class="key-point">
+                <strong>🛣️ Route Management</strong>
+                <p>Admin creates routes → Immediately available to mobile users</p>
+            </div>
+            <div class="key-point">
+                <strong>🎫 Support Tickets</strong>
+                <p>Bidirectional communication with email notifications via EmailJS</p>
+            </div>
+            <div class="key-point">
+                <strong>💰 Settings Update</strong>
+                <p>Admin changes fare rates → Applied to all new fare calculations</p>
+            </div>
+            <div class="key-point">
+                <strong>📍 Content Publishing</strong>
+                <p>Admin adds landmarks → Real-time sync to mobile app</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- INFO SECTION -->
+<div id="info" class="diagram-section">
+    <div class="card">
+        <h2>Technology Stack</h2>
+        <p class="subtitle">Technologies powering the LeJeepney system</p>
+        <table>
+            <thead>
+                <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Admin Frontend</td><td>Laravel Blade, Tailwind CSS, Leaflet.js</td><td>Web-based admin panel</td></tr>
+                <tr><td>Mobile Frontend</td><td>Flutter (Dart), Provider, flutter_map</td><td>Cross-platform mobile app</td></tr>
+                <tr><td>Backend</td><td>Laravel 12, PHP 8.2</td><td>REST API + Web routes</td></tr>
+                <tr><td>Database</td><td>MySQL 8.0+</td><td>Data persistence</td></tr>
+                <tr><td>Authentication</td><td>Laravel Sanctum (API), Sessions (Web)</td><td>Secure access control</td></tr>
+                <tr><td>External APIs</td><td>OpenRouteService, OSRM, EmailJS</td><td>Walking routes, email</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="info-grid">
+        <div class="info-card">
+            <h3>🔐 Admin Authentication</h3>
+            <ul>
+                <li>Session-based auth with cookies</li>
+                <li>Laravel <code>web</code> guard</li>
+                <li>Only <code>role = 'admin'</code> can access</li>
+                <li>CSRF protection enabled</li>
+                <li>Login throttling (5 attempts/min)</li>
+                <li>Activity logging for audit trail</li>
+            </ul>
+        </div>
+        <div class="info-card">
+            <h3>📱 Mobile Authentication</h3>
+            <ul>
+                <li>Token-based auth with Laravel Sanctum</li>
+                <li>Personal Access Tokens</li>
+                <li>30-day token expiry</li>
+                <li>Only <code>role = 'user'</code> can login</li>
+                <li>Rate limit: 60 req/min</li>
+                <li>Secure token storage on device</li>
+            </ul>
+        </div>
+        <div class="info-card">
+            <h3>🛡️ API Security</h3>
+            <ul>
+                <li>Rate limiting (60 req/min per IP)</li>
+                <li>Bearer token authentication</li>
+                <li>Input validation & sanitization</li>
+                <li>CORS protection</li>
+                <li>SQL injection prevention (Eloquent ORM)</li>
+                <li>Passwords hashed with bcrypt</li>
+            </ul>
+        </div>
+        <div class="info-card">
+            <h3>🔄 Data Synchronization</h3>
+            <ul>
+                <li>Tickets poll every 30 seconds</li>
+                <li>Routes refresh on app launch</li>
+                <li>Landmarks cached locally</li>
+                <li>Settings fetched before fare calc</li>
+                <li>Offline browsing of cached data</li>
+                <li>Queued submissions when offline</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<footer>
+    LeJeepney — Davao City Jeepney Navigation System &bull; March 2026
+</footer>
+
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'default',
+        securityLevel: 'loose',
+        flowchart: { curve: 'basis', useMaxWidth: true },
+        sequence: { useMaxWidth: true, wrap: true }
+    });
+
+    function showSection(id) {
+        document.querySelectorAll('.diagram-section').forEach(s => s.classList.remove('visible'));
+        document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+        document.getElementById(id).classList.add('visible');
+        event.target.classList.add('active');
+    }
+</script>
+
+</body>
+</html>

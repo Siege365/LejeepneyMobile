@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../utils/transit_routing/transit_routing.dart';
 import '../widgets/common/offline_banner.dart';
+import '../services/feature_tutorial_service.dart';
 import 'home/home_screen.dart';
 import 'search/search_screen.dart';
 import 'fare/fare_calculator_screen.dart';
@@ -159,7 +160,11 @@ class _MainNavigationState extends State<MainNavigation> {
     final isSelected = _currentIndex == index;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _currentIndex = index),
+        onTap: () {
+          // Block tab switching during tutorials
+          if (FeatureTutorialService.instance.isTutorialActive) return;
+          setState(() => _currentIndex = index);
+        },
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -187,7 +192,11 @@ class _MainNavigationState extends State<MainNavigation> {
     final isSelected = _currentIndex == 2;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _currentIndex = 2),
+        onTap: () {
+          // Block tab switching during tutorials
+          if (FeatureTutorialService.instance.isTutorialActive) return;
+          setState(() => _currentIndex = 2);
+        },
         child: Container(
           width: 56,
           height: 56,

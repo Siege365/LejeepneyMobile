@@ -48,7 +48,7 @@ class _ReportFeedbackScreenState extends State<ReportFeedbackScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Report & Feedback',
+          'Customer Service',
           style: GoogleFonts.slackey(
             fontSize: 20,
             color: AppColors.textPrimary,
